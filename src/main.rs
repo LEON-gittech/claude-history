@@ -2,6 +2,7 @@ mod claude;
 mod cli;
 mod display;
 mod error;
+mod filters;
 mod fzf;
 mod history;
 

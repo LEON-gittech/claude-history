@@ -1,5 +1,6 @@
 use crate::claude::{LogEntry, extract_text_from_assistant, extract_text_from_user};
 use crate::error::{AppError, Result};
+use crate::filters;
 use chrono::{DateTime, Local};
 use std::fs::{File, read_dir};
 use std::io::{BufRead, BufReader};
@@ -81,6 +82,7 @@ fn process_conversation_file(
     let mut all_parts = Vec::new();
     let mut user_messages = Vec::new();
     let mut first_timestamp: Option<DateTime<Local>> = None;
+    let mut prev_was_warmup_user = false;
 
     for line in reader.lines() {
         let line = line?;
@@ -89,6 +91,20 @@ fn process_conversation_file(
         }
 
         if let Ok(entry) = serde_json::from_str::<LogEntry>(&line) {
+            // Check if this is a warmup user message
+            if filters::is_warmup_user(&entry) {
+                prev_was_warmup_user = true;
+                continue; // Skip warmup user message
+            }
+
+            // Check if this is a warmup assistant message following a warmup user
+            if prev_was_warmup_user && filters::is_warmup_assistant(&entry) {
+                prev_was_warmup_user = false;
+                continue; // Skip warmup assistant message
+            }
+
+            prev_was_warmup_user = false;
+
             // Capture timestamp from first user or assistant message
             if first_timestamp.is_none() {
                 let timestamp_str = match &entry {
