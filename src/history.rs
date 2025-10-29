@@ -61,8 +61,9 @@ pub fn load_conversations(projects_dir: &Path, show_last: bool) -> Result<Vec<Co
 
     // Process each file once
     let mut conversations = Vec::new();
-    for (idx, path) in file_paths.iter().enumerate() {
-        if let Some(conversation) = process_conversation_file(path.clone(), idx, show_last)? {
+    for path in file_paths {
+        if let Some(mut conversation) = process_conversation_file(path, show_last)? {
+            conversation.index = conversations.len();
             conversations.push(conversation);
         }
     }
@@ -71,11 +72,7 @@ pub fn load_conversations(projects_dir: &Path, show_last: bool) -> Result<Vec<Co
 }
 
 /// Process a single conversation file and extract all necessary information
-fn process_conversation_file(
-    path: PathBuf,
-    index: usize,
-    show_last: bool,
-) -> Result<Option<Conversation>> {
+fn process_conversation_file(path: PathBuf, show_last: bool) -> Result<Option<Conversation>> {
     let file = File::open(&path)?;
     let reader = BufReader::new(file);
 
@@ -175,7 +172,7 @@ fn process_conversation_file(
 
     Ok(Some(Conversation {
         path,
-        index,
+        index: 0,
         timestamp,
         preview,
         full_text,
