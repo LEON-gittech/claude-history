@@ -35,15 +35,17 @@ matches against the entire transcript; the preview shows the first three
 messages by default.
 
 ```
+View Claude conversation history with fuzzy search
+
 Usage: claude-history [OPTIONS]
 
 Options:
-  -t, --no-tools          Hide tool calls from the conversation output
-  -d, --show-dir          Print the conversation directory path and exit
-  -l, --last              Show the last messages in the fuzzy finder preview
-  -r, --relative-time     Display relative time instead of absolute timestamp
-  -c, --resume            Resume the selected conversation in Claude Code
-  -h, --help              Print help
+  -t, --no-tools       Hide tool calls from the conversation output
+  -d, --show-dir       Print the conversation directory path and exit
+  -l, --last           Show the last messages in the fuzzy finder preview
+  -r, --relative-time  Display relative time instead of absolute timestamp
+  -c, --resume         Resume the selected conversation in Claude Code
+  -h, --help           Print help
 ```
 
 ### preview modes
@@ -60,6 +62,45 @@ interested in the human conversation. Use `--no-tools` to suppress those lines.
 
 If you want to continue a conversation, launch `claude-history` with `--resume`
 and it will hand off to `claude --resume <conversation-id>`.
+
+### integration with other scripts
+
+You can integrate `claude-history` into other tools to pass conversation context
+to new Claude Code sessions. This is useful when you want Claude to understand
+what you were working on previously.
+
+For example, a commit message generator script could use the conversation history
+to write more contextual commit messages:
+
+```bash
+# Get conversation history if --context flag is set
+conversation_context=""
+if [ "$include_history" = true ]; then
+    echo "Loading conversation history..."
+    conversation_history=$(claude-history --no-tools 2>/dev/null)
+    if [ -n "$conversation_history" ]; then
+        conversation_context="
+
+=== START CONVERSATION CONTEXT ===
+$conversation_history
+=== END CONVERSATION CONTEXT ===
+
+"
+    fi
+fi
+
+# Pass to Claude CLI with the conversation context
+prompt="Write a commit message for these changes.
+${conversation_context}
+Staged changes:
+$staged_diff"
+
+claude -p "$prompt"
+```
+
+The `--no-tools` flag is particularly useful here since it filters out tool
+invocations, giving you clean conversation text that's easier for Claude to
+process as context.
 
 ## filtering details
 
