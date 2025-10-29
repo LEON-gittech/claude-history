@@ -91,6 +91,12 @@ fn run() -> Result<()> {
         display_config.relative_time,
         false,
     );
+    let show_thinking = resolve_bool_setting(
+        args.show_thinking,
+        args.hide_thinking,
+        display_config.show_thinking,
+        false,
+    );
 
     // Load all conversations (reads each file once)
     let conversations = history::load_conversations(&projects_dir, show_last)?;
@@ -107,8 +113,8 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    // Display the selected conversation (pass the negative form)
-    display::display_conversation(&selected_path, !show_tools)?;
+    // Display the selected conversation (pass the negative form for no_tools)
+    display::display_conversation(&selected_path, !show_tools, show_thinking)?;
 
     Ok(())
 }

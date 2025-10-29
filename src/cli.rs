@@ -36,6 +36,14 @@ pub struct Args {
     #[arg(long, group = "time_display")]
     pub absolute_time: bool,
 
+    /// Show thinking blocks in the conversation output
+    #[arg(long, group = "thinking_display")]
+    pub show_thinking: bool,
+
+    /// Hide thinking blocks from the conversation output
+    #[arg(long, group = "thinking_display")]
+    pub hide_thinking: bool,
+
     /// Resume the selected conversation in the Claude CLI
     #[arg(
         long,

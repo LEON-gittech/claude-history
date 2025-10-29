@@ -7,7 +7,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 /// Display a conversation from a file
-pub fn display_conversation(file_path: &Path, no_tools: bool) -> Result<()> {
+pub fn display_conversation(file_path: &Path, no_tools: bool, show_thinking: bool) -> Result<()> {
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
 
@@ -34,7 +34,7 @@ pub fn display_conversation(file_path: &Path, no_tools: bool) -> Result<()> {
                 }
 
                 prev_was_warmup_user = false;
-                display_entry(&entry, no_tools);
+                display_entry(&entry, no_tools, show_thinking);
             }
             Err(e) => {
                 eprintln!("Failed to parse line: {}", e);
@@ -46,7 +46,7 @@ pub fn display_conversation(file_path: &Path, no_tools: bool) -> Result<()> {
     Ok(())
 }
 
-fn display_entry(entry: &LogEntry, no_tools: bool) {
+fn display_entry(entry: &LogEntry, no_tools: bool, show_thinking: bool) {
     match entry {
         LogEntry::Summary { .. }
         | LogEntry::FileHistorySnapshot { .. }
@@ -66,7 +66,7 @@ fn display_entry(entry: &LogEntry, no_tools: bool) {
             }
         },
         LogEntry::Assistant { message, .. } => {
-            display_assistant_message(message, no_tools);
+            display_assistant_message(message, no_tools, show_thinking);
         }
     }
 }
@@ -101,7 +101,7 @@ impl<'a> From<&'a AssistantMessage> for FormattedMessage<'a> {
     }
 }
 
-fn display_assistant_message(message: &AssistantMessage, no_tools: bool) {
+fn display_assistant_message(message: &AssistantMessage, no_tools: bool, show_thinking: bool) {
     let formatted = FormattedMessage::from(message);
 
     for text in formatted.text_blocks {
@@ -114,7 +114,9 @@ fn display_assistant_message(message: &AssistantMessage, no_tools: bool) {
         }
     }
 
-    for thought in formatted.thinking_steps {
-        println!("{} {}", "Thinking:".yellow().bold(), thought);
+    if show_thinking {
+        for thought in formatted.thinking_steps {
+            println!("{} {}", "Thinking:".yellow().bold(), thought);
+        }
     }
 }
