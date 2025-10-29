@@ -1,5 +1,21 @@
 # claude-history
 
+```
+% claude-history
+╭──────────────────────────────────────────────────────────────────────────────────╮
+│ > ▌                                                                              │
+│   19/19 ──────────────────────────────────────────────────────────────────────── │
+│ ▌ [0] 11 hours | Adding 1 card(s) to Anki... Successfully added 1 new note ··    │
+│   [1] 12 hours | ~/D/anki-llm-decks % anki-llm generate-init ... I can see the·· │
+│   [2] a day | Why? Manually editing hundreds or thousands of Anki cards is ted·· │
+│   [3] a day | Add disclaimer about pricing in ### Supported models that check ·· │
+│   [4] a day | @README.md Manually editing hundreds or thousands of Anki cards ·· │
+│   [5] a day | ~/c/anki-llm % identify logo.png logo.png PNG 756x238 756x238+0+·· │
+│   [6] 2 days | @src/commands/generate-init.ts Which model parameter does gener·· │
+│   [7] 2 days | @README.md Ask gemini what would be a good way to improve the r·· │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+```
+
 `claude-history` is a companion CLI for Claude Code. It lets you search recent
 conversations recorded in Claude's local project history with an
 `fzf`-powered fuzzy finder, then prints the selected transcript in a tidy,
