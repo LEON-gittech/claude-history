@@ -101,9 +101,17 @@ def update_cargo_files(crate_name: str, new_version: str) -> None:
             CARGO_LOCK.write_text(new_lock_text)
 
 
-def commit_and_tag(new_version: str) -> None:
+def commit_release(new_version: str) -> None:
     message = f"Release v{new_version}"
-    run(["git", "commit", "-am", message])
+    paths_to_stage = ["Cargo.toml"]
+    if CARGO_LOCK.exists():
+        paths_to_stage.append("Cargo.lock")
+    run(["git", "add", *paths_to_stage])
+    run(["git", "commit", "-m", message])
+
+
+def tag_release(new_version: str) -> None:
+    message = f"Release v{new_version}"
     run(["git", "tag", "-a", f"v{new_version}", "-m", message])
 
 
@@ -132,9 +140,11 @@ def main() -> None:
         sys.stderr.write("error: version bump produced no changes; aborting\n")
         sys.exit(1)
 
+    commit_release(new_version)
+
     publish_crate()
 
-    commit_and_tag(new_version)
+    tag_release(new_version)
 
     print(f"Released {crate_name} v{new_version}")
 
