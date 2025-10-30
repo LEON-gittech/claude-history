@@ -1,9 +1,11 @@
 use crate::claude::{LogEntry, extract_text_from_assistant, extract_text_from_user};
 use crate::error::{AppError, Result};
 use chrono::{DateTime, Local};
+use rayon::prelude::*;
 use std::fs::{File, read_dir};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 pub struct Conversation {
     pub path: PathBuf,
@@ -39,73 +41,79 @@ pub fn load_conversations(
     show_last: bool,
     debug: bool,
 ) -> Result<Vec<Conversation>> {
-    // Find all JSONL files
-    let mut file_paths = Vec::new();
+    // Find all JSONL files and capture metadata in one pass
+    let mut files_with_meta = Vec::new();
     let mut skipped_agent_files = 0;
 
     for entry in read_dir(projects_dir)? {
         let entry = entry?;
         let path = entry.path();
 
-        if path.extension().and_then(|s| s.to_str()) == Some("jsonl")
-            && let Some(filename) = path.file_name().and_then(|f| f.to_str())
-        {
-            if filename.starts_with("agent-") {
+        if path.extension().and_then(|s| s.to_str()) == Some("jsonl") {
+            if let Some(filename) = path.file_name().and_then(|f| f.to_str())
+                && filename.starts_with("agent-")
+            {
                 skipped_agent_files += 1;
                 if debug {
                     eprintln!("[DEBUG] Skipping agent file: {}", filename);
                 }
-            } else {
-                file_paths.push(path);
+                continue;
             }
+
+            let modified = entry
+                .metadata()
+                .ok()
+                .and_then(|metadata| metadata.modified().ok());
+
+            files_with_meta.push((path, modified));
         }
     }
 
     if debug {
         eprintln!(
             "[DEBUG] Found {} conversation files ({} agent files skipped)",
-            file_paths.len(),
+            files_with_meta.len(),
             skipped_agent_files
         );
     }
 
     // Sort by modification time (newest first)
-    file_paths.sort_by_key(|path| {
-        std::fs::metadata(path)
-            .and_then(|m| m.modified())
-            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-    });
-    file_paths.reverse();
+    files_with_meta.sort_by_key(|(_, modified)| modified.unwrap_or(SystemTime::UNIX_EPOCH));
+    files_with_meta.reverse();
 
-    // Process each file once
-    let mut conversations = Vec::new();
+    // Process each file (potentially in parallel)
+    let mut conversations: Vec<Conversation> = files_with_meta
+        .into_par_iter()
+        .filter_map(|(path, modified)| {
+            let filename = path
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("unknown")
+                .to_owned();
 
-    for path in file_paths {
-        let filename = path
-            .file_name()
-            .and_then(|f| f.to_str())
-            .unwrap_or("unknown");
-
-        // Get modification time for display
-        let modified = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-
-        match process_conversation_file(path.clone(), show_last, modified, debug) {
-            Ok(Some(mut conversation)) => {
-                if debug {
-                    eprintln!("[DEBUG] Loaded {}: {}", filename, conversation.preview);
+            match process_conversation_file(path, show_last, modified, debug) {
+                Ok(Some(conversation)) => {
+                    if debug {
+                        eprintln!("[DEBUG] Loaded {}: {}", filename, conversation.preview);
+                    }
+                    Some(conversation)
                 }
-                conversation.index = conversations.len();
-                conversations.push(conversation);
-            }
-            Ok(None) => {
-                // File was filtered - reason already printed in debug output
-            }
-            Err(e) => {
-                if debug {
-                    eprintln!("[DEBUG] Error processing {}: {}", filename, e);
+                Ok(None) => None,
+                Err(e) => {
+                    if debug {
+                        eprintln!("[DEBUG] Error processing {}: {}", filename, e);
+                    }
+                    None
                 }
             }
-        }
+        })
+        .collect();
+
+    // Ensure deterministic ordering after parallel processing
+    conversations.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+    for (idx, conv) in conversations.iter_mut().enumerate() {
+        conv.index = idx;
     }
 
     if debug {
@@ -122,7 +130,7 @@ pub fn load_conversations(
 fn process_conversation_file(
     path: PathBuf,
     show_last: bool,
-    modified: Option<std::time::SystemTime>,
+    modified: Option<SystemTime>,
     debug: bool,
 ) -> Result<Option<Conversation>> {
     let filename = path

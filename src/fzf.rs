@@ -34,35 +34,13 @@ pub fn select_conversation(
             .as_mut()
             .ok_or_else(|| AppError::FzfExecutionError("Failed to open stdin".to_string()))?;
 
-        // Calculate max timestamp width and max index width for alignment
-        let max_timestamp_width = conversations
-            .iter()
-            .map(|conv| {
-                if use_relative_time {
-                    format_relative_time(conv.timestamp).len()
-                } else {
-                    conv.timestamp.format("%b %d, %H:%M").to_string().len()
-                }
-            })
-            .max()
-            .unwrap_or(0);
-
-        let max_index_width = conversations
-            .iter()
-            .map(|conv| conv.index.to_string().len())
-            .max()
-            .unwrap_or(0);
-
         for conv in conversations {
             let timestamp = if use_relative_time {
                 format_relative_time(conv.timestamp)
             } else {
                 conv.timestamp.format("%b %d, %H:%M").to_string()
             };
-            let padded_timestamp = format!("{:<width$}", timestamp, width = max_timestamp_width);
-            let padded_index = format!("{:>width$}", conv.index, width = max_index_width);
-            let display_part =
-                format!("[{}] {} | {}", padded_index, padded_timestamp, conv.preview);
+            let display_part = format!("[{}] {} | {}", conv.index, timestamp, conv.preview);
             // Format: INDEX<tab>DISPLAY_PART<tab>FULL_TEXT
             writeln!(
                 stdin,
@@ -70,6 +48,7 @@ pub fn select_conversation(
                 conv.index, display_part, conv.full_text
             )?;
         }
+        stdin.flush()?;
     }
 
     let output = child.wait_with_output()?;
