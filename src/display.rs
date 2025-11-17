@@ -43,8 +43,26 @@ fn display_entry(entry: &LogEntry, no_tools: bool, show_thinking: bool) {
             }
             UserContent::Blocks(blocks) => {
                 for block in blocks {
-                    if let ContentBlock::Text { text } = block {
-                        println!("{} {}", "User:".blue().bold(), text);
+                    match block {
+                        ContentBlock::Text { text } => {
+                            println!("{} {}", "User:".blue().bold(), text);
+                        }
+                        ContentBlock::ToolResult { content, .. } => {
+                            if !no_tools {
+                                println!("{}", "<Tool Result>".cyan().bold());
+                                // Tool result content can be a string or an array of content blocks
+                                if let Some(result_str) = content.as_str() {
+                                    // If it's a simple string, display it directly
+                                    println!("{}", result_str.dimmed());
+                                } else if let Ok(formatted_result) =
+                                    serde_json::to_string_pretty(content)
+                                {
+                                    // Otherwise, pretty-print the JSON
+                                    println!("{}", formatted_result.dimmed());
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }

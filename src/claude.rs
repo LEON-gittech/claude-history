@@ -70,8 +70,8 @@ pub enum ContentBlock {
         name: String,
         input: serde_json::Value,
     },
-    #[allow(dead_code)]
     ToolResult {
+        #[allow(dead_code)]
         tool_use_id: String,
         content: serde_json::Value, // Can be string or array of content blocks
     },
