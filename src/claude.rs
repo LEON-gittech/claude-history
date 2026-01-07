@@ -12,6 +12,8 @@ pub enum LogEntry {
         message: UserMessage,
         #[allow(dead_code)]
         timestamp: String,
+        /// The working directory when this message was sent
+        cwd: Option<String>,
     },
     Assistant {
         message: AssistantMessage,
