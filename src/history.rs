@@ -15,6 +15,8 @@ pub struct Conversation {
     pub full_text: String,
     pub project_name: Option<String>,
     pub project_path: Option<PathBuf>,
+    /// The working directory extracted from the JSONL file (the actual cwd)
+    pub cwd: Option<PathBuf>,
 }
 
 pub struct Project {
@@ -62,12 +64,13 @@ pub fn load_all_conversations(show_last: bool, debug: bool) -> Result<Vec<Conver
                 Ok(mut convs) => {
                     // Extract a short display name for the project (use encoded name for parsing)
                     let short_name = format_project_short_name(&project.name);
-                    // Try to find the actual project path (tries multiple decode strategies)
+                    // Fallback: decode the project directory name (may be inaccurate for paths with dots)
                     let decoded_path = decode_project_dir_name_to_path(&project.name);
                     // Inject project info into each conversation
                     for conv in &mut convs {
                         conv.project_name = Some(short_name.clone());
-                        conv.project_path = Some(decoded_path.clone());
+                        // Prefer the cwd extracted from the JSONL file (accurate), fall back to decoded path
+                        conv.project_path = Some(conv.cwd.clone().unwrap_or_else(|| decoded_path.clone()));
                     }
                     convs
                 }
@@ -755,6 +758,7 @@ fn process_conversation_file(
     let mut user_messages = Vec::new();
     let mut seen_real_user_message = false;
     let mut skip_next_assistant = false;
+    let mut extracted_cwd: Option<PathBuf> = None;
 
     for line in reader.lines() {
         let line = line?;
@@ -765,7 +769,14 @@ fn process_conversation_file(
         if let Ok(entry) = serde_json::from_str::<LogEntry>(&line) {
             // Extract text content
             match entry {
-                LogEntry::User { message, .. } => {
+                LogEntry::User { message, cwd, .. } => {
+                    // Extract cwd from the first user message that has it
+                    if extracted_cwd.is_none() {
+                        if let Some(cwd_str) = cwd {
+                            extracted_cwd = Some(PathBuf::from(cwd_str));
+                        }
+                    }
+
                     let text = extract_text_from_user(&message);
                     if text.is_empty() {
                         continue;
@@ -865,6 +876,7 @@ fn process_conversation_file(
         full_text,
         project_name: None,
         project_path: None,
+        cwd: extracted_cwd,
     }))
 }
 
