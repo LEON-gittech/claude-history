@@ -85,9 +85,9 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(Color::White)
             };
 
-            // Highlight style: bold for selected row, cyan for others
+            // Highlight style: cyan with bold for selected row
             let highlight_style = if is_selected {
-                Style::default().fg(Color::White).bold()
+                Style::default().fg(Color::Rgb(78, 201, 176)).bold()
             } else {
                 Style::default().fg(Color::Rgb(78, 201, 176))
             };
