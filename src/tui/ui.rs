@@ -191,7 +191,7 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
             };
 
             // Build preview with highlighted matches
-            let preview_style = Style::default().fg(Color::Rgb(110, 110, 110));
+            let preview_style = Style::default().fg(Color::Rgb(130, 130, 130));
             let mut preview_spans = vec![Span::styled(indicator.to_string(), indicator_style)];
             preview_spans.extend(highlight_text(
                 &truncated_preview,
@@ -228,7 +228,7 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
                     };
 
                     // Build context line with highlighting (dimmer style)
-                    let context_base_style = Style::default().fg(Color::Rgb(80, 80, 80));
+                    let context_base_style = Style::default().fg(Color::Rgb(100, 100, 100));
                     let context_highlight_style = Style::default().fg(Color::Rgb(60, 160, 140)); // Dimmer cyan
 
                     let mut context_spans =
