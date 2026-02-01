@@ -1,0 +1,2 @@
+pre_merge:
+  - just check-ci
