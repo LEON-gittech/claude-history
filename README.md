@@ -133,18 +133,8 @@ and it will hand off to `claude --resume <conversation-id>`.
 
 ### Markdown rendering
 
-Claude's responses are rendered with basic markdown formatting:
-
-- **Code blocks** are displayed with distinct styling and preserved formatting
-- **Inline code** appears with background highlighting
-- **Bold**, _italic_, and ~~strikethrough~~ text are styled appropriately
-- **Lists** (ordered and unordered) maintain their structure
-- **Headings** are rendered with # prefixes and emphasized styling
-- **Blockquotes** appear in green with > prefix
-- **Tables** are rendered with box-drawing characters for clean alignment
-
-This makes Claude's formatted responses much more readable in the terminal. Use
-`--plain` to disable markdown rendering and get raw text output.
+Claude's responses are rendered with markdown formatting for better terminal
+readability. Use `--plain` to disable rendering and get raw text output.
 
 ### Plain output mode
 
