@@ -290,7 +290,8 @@ impl MarkdownRenderer {
     fn text(&mut self, text: &str) {
         // Handle table cell text
         if let Some(ref mut state) = self.table_state {
-            state.current_cell.push_str(text);
+            // Replace newlines with spaces to prevent breaking table layout
+            state.current_cell.push_str(&text.replace('\n', " "));
             return;
         }
 
