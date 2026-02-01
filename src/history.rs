@@ -7,6 +7,8 @@ use rayon::prelude::*;
 use std::fs::{File, read_dir};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
 use std::time::SystemTime;
 
 /// Represents a JSONL parsing error with context for debugging
@@ -63,6 +65,7 @@ pub fn get_claude_projects_dir(current_dir: &Path) -> Result<PathBuf> {
 }
 
 /// Load conversations from ALL projects globally
+#[allow(dead_code)]
 pub fn load_all_conversations(
     show_last: bool,
     debug_level: Option<DebugLevel>,
@@ -123,6 +126,102 @@ pub fn load_all_conversations(
     );
 
     Ok(all_conversations)
+}
+
+/// Message sent from background loader to TUI
+pub enum LoaderMessage {
+    /// A fatal error occurred (e.g., projects root doesn't exist)
+    Fatal(AppError),
+    /// A non-fatal error occurred (project-level, error already logged)
+    ProjectError,
+    /// A batch of loaded conversations from one project
+    Batch(Vec<Conversation>),
+    /// Loading completed
+    Done,
+}
+
+/// Start loading all conversations in the background
+/// Returns a receiver that will receive LoaderMessage updates
+pub fn load_all_conversations_streaming(
+    show_last: bool,
+    debug_level: Option<DebugLevel>,
+) -> Receiver<LoaderMessage> {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        load_all_streaming_inner(tx, show_last, debug_level);
+    });
+
+    rx
+}
+
+fn load_all_streaming_inner(
+    tx: Sender<LoaderMessage>,
+    show_last: bool,
+    debug_level: Option<DebugLevel>,
+) {
+    // First, validate that the projects root exists (fatal if not)
+    let root = match get_claude_projects_root() {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = tx.send(LoaderMessage::Fatal(e));
+            return;
+        }
+    };
+
+    if !root.exists() {
+        let _ = tx.send(LoaderMessage::Fatal(AppError::ProjectsDirNotFound(
+            root.display().to_string(),
+        )));
+        return;
+    }
+
+    // List projects (fatal if this fails)
+    let projects = match list_projects(&root) {
+        Ok(p) => p,
+        Err(e) => {
+            let _ = tx.send(LoaderMessage::Fatal(e));
+            return;
+        }
+    };
+
+    debug::info(
+        debug_level,
+        &format!("Loading global history from {} projects", projects.len()),
+    );
+
+    // Process projects in parallel and send batches as they complete
+    projects.par_iter().for_each(|project| {
+        let project_dir = root.join(&project.name);
+
+        match load_conversations(&project_dir, show_last, debug_level) {
+            Ok(mut convs) => {
+                if convs.is_empty() {
+                    return;
+                }
+
+                let fallback_path = decode_project_dir_name_to_path(&project.name);
+
+                for conv in &mut convs {
+                    let project_path = conv.cwd.clone().unwrap_or_else(|| fallback_path.clone());
+                    conv.project_name = Some(format_short_name_from_path(&project_path));
+                    conv.project_path = Some(project_path);
+                }
+
+                // Send batch, ignore error if receiver dropped
+                let _ = tx.send(LoaderMessage::Batch(convs));
+            }
+            Err(e) => {
+                debug::warn(
+                    debug_level,
+                    &format!("Failed to load project {}: {}", project.display_name, e),
+                );
+                let _ = tx.send(LoaderMessage::ProjectError);
+            }
+        }
+    });
+
+    let _ = tx.send(LoaderMessage::Done);
 }
 
 /// List all projects that contain conversation files

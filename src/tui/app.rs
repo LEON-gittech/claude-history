@@ -1,6 +1,6 @@
 use crate::debug_log;
 use crate::error::{AppError, Result};
-use crate::history::Conversation;
+use crate::history::{Conversation, LoaderMessage};
 use crate::tui::search::{self, SearchableConversation};
 use crate::tui::ui;
 use chrono::Local;
@@ -9,11 +9,22 @@ use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::prelude::*;
 use std::io::{self, Stdout};
 use std::path::PathBuf;
+use std::sync::mpsc::Receiver;
+use std::time::Duration;
 
 /// Result of running the TUI
 pub enum Action {
     Select(PathBuf),
     Quit,
+}
+
+/// Loading state for the TUI
+#[derive(Clone, Debug)]
+pub enum LoadingState {
+    /// Still loading conversations
+    Loading { loaded: usize },
+    /// All conversations loaded and ready
+    Ready,
 }
 
 /// App state
@@ -30,9 +41,12 @@ pub struct App {
     query: String,
     /// Whether to use relative time display
     use_relative_time: bool,
+    /// Loading state
+    loading_state: LoadingState,
 }
 
 impl App {
+    /// Create a new app with all conversations pre-loaded (existing behavior)
     pub fn new(conversations: Vec<Conversation>, use_relative_time: bool) -> Self {
         let searchable = search::precompute_search_text(&conversations);
         let filtered: Vec<usize> = (0..conversations.len()).collect();
@@ -45,7 +59,81 @@ impl App {
             selected,
             query: String::new(),
             use_relative_time,
+            loading_state: LoadingState::Ready,
         }
+    }
+
+    /// Create a new app in loading state
+    pub fn new_loading(use_relative_time: bool) -> Self {
+        Self {
+            conversations: Vec::new(),
+            searchable: Vec::new(),
+            filtered: Vec::new(),
+            selected: None,
+            query: String::new(),
+            use_relative_time,
+            loading_state: LoadingState::Loading { loaded: 0 },
+        }
+    }
+
+    /// Append a batch of conversations during loading
+    /// Note: Does NOT precompute search text - that's deferred to finish_loading
+    pub fn append_conversations(&mut self, new_convs: Vec<Conversation>) {
+        let start_idx = self.conversations.len();
+        self.conversations.extend(new_convs);
+        let end_idx = self.conversations.len();
+
+        // Update filtered so items appear in the list during loading
+        // (Items shown in arrival order initially, will be re-sorted in finish_loading)
+        self.filtered.extend(start_idx..end_idx);
+
+        // Select first item if nothing selected yet
+        if self.selected.is_none() && !self.filtered.is_empty() {
+            self.selected = Some(0);
+        }
+
+        // Update loading count
+        self.loading_state = LoadingState::Loading {
+            loaded: self.conversations.len(),
+        };
+    }
+
+    /// Mark loading as complete: sort, precompute search, and transition to Ready
+    pub fn finish_loading(&mut self) {
+        // Sort all conversations by timestamp (newest first)
+        self.conversations
+            .sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+        // Reindex after sorting
+        for (idx, conv) in self.conversations.iter_mut().enumerate() {
+            conv.index = idx;
+        }
+
+        // Now precompute search text (only once, at the end)
+        self.searchable = search::precompute_search_text(&self.conversations);
+
+        // Reset filtered to all indices
+        self.filtered = (0..self.conversations.len()).collect();
+        self.selected = if self.filtered.is_empty() {
+            None
+        } else {
+            Some(0)
+        };
+
+        self.loading_state = LoadingState::Ready;
+    }
+
+    /// Consume the app and return its conversations
+    pub fn into_conversations(self) -> Vec<Conversation> {
+        self.conversations
+    }
+
+    pub fn loading_state(&self) -> &LoadingState {
+        &self.loading_state
+    }
+
+    pub fn is_loading(&self) -> bool {
+        matches!(self.loading_state, LoadingState::Loading { .. })
     }
 
     /// Update filtered results based on current query
@@ -136,6 +224,42 @@ impl App {
 
     /// Handle a key event, returns Some(Action) if the app should exit
     fn handle_key(&mut self, code: KeyCode, modifiers: KeyModifiers) -> Option<Action> {
+        // During loading, allow navigation and quit but not search or selection
+        if self.is_loading() {
+            return match code {
+                KeyCode::Esc => Some(Action::Quit),
+                KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    Some(Action::Quit)
+                }
+                KeyCode::Up => {
+                    self.select_prev();
+                    None
+                }
+                KeyCode::Down => {
+                    self.select_next();
+                    None
+                }
+                KeyCode::Char('n') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.select_next();
+                    None
+                }
+                KeyCode::Char('p') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.select_prev();
+                    None
+                }
+                KeyCode::PageUp => {
+                    self.select_page_up();
+                    None
+                }
+                KeyCode::PageDown => {
+                    self.select_page_down();
+                    None
+                }
+                _ => None,
+            };
+        }
+
+        // Normal handling when ready
         match code {
             KeyCode::Esc => Some(Action::Quit),
             KeyCode::Enter => self.get_selected_path().map(Action::Select),
@@ -249,6 +373,75 @@ pub fn run(conversations: Vec<Conversation>, use_relative_time: bool) -> Result<
                 }
                 return Ok(action);
             }
+        }
+    }
+}
+
+/// Run the TUI with background loading
+/// Returns the action and the final list of conversations
+pub fn run_with_loader(
+    rx: Receiver<LoaderMessage>,
+    use_relative_time: bool,
+) -> Result<(Action, Vec<Conversation>)> {
+    // Set up panic hook to restore terminal
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let _ = terminal::disable_raw_mode();
+        let _ = crossterm::execute!(io::stdout(), LeaveAlternateScreen);
+        original_hook(panic_info);
+    }));
+
+    let mut guard = TerminalGuard::new()?;
+    let mut app = App::new_loading(use_relative_time);
+
+    loop {
+        // Process all pending loader messages (non-blocking)
+        loop {
+            match rx.try_recv() {
+                Ok(LoaderMessage::Fatal(err)) => {
+                    // Fatal error - restore terminal and return error
+                    drop(guard);
+                    return Err(err);
+                }
+                Ok(LoaderMessage::ProjectError) => {
+                    // Logged by loader, continue
+                }
+                Ok(LoaderMessage::Batch(convs)) => {
+                    app.append_conversations(convs);
+                }
+                Ok(LoaderMessage::Done) => {
+                    app.finish_loading();
+                    // Check for empty conversations
+                    if app.conversations().is_empty() {
+                        drop(guard);
+                        return Err(AppError::NoHistoryFound("selected scope".to_string()));
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    // Loader finished unexpectedly
+                    if app.is_loading() {
+                        app.finish_loading();
+                        if app.conversations().is_empty() {
+                            drop(guard);
+                            return Err(AppError::NoHistoryFound("selected scope".to_string()));
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Render current state
+        guard.terminal.draw(|frame| ui::render(frame, &app))?;
+
+        // Poll for keyboard input with timeout (allows us to check loader messages)
+        if event::poll(Duration::from_millis(50)).map_err(|e| AppError::Io(io::Error::other(e)))?
+            && let Event::Key(key) = event::read().map_err(|e| AppError::Io(io::Error::other(e)))?
+            && key.kind == KeyEventKind::Press
+            && let Some(action) = app.handle_key(key.code, key.modifiers)
+        {
+            return Ok((action, app.into_conversations()));
         }
     }
 }

@@ -2,4 +2,4 @@ mod app;
 mod search;
 mod ui;
 
-pub use app::{Action, run};
+pub use app::{Action, run, run_with_loader};

@@ -76,11 +76,16 @@ fn run() -> Result<()> {
     );
 
     // Determine how to load conversations based on mode
-    let conversations = if args.global {
-        // Global Search (-g) - search all projects at once
-        history::load_all_conversations(show_last, args.debug)?
+    let (conversations, selected_path) = if args.global {
+        // Global Search (-g) - use streaming loader for instant startup
+        let rx = history::load_all_conversations_streaming(show_last, args.debug);
+
+        match tui::run_with_loader(rx, use_relative_time)? {
+            (tui::Action::Select(path), convs) => (convs, path),
+            (tui::Action::Quit, _) => return Err(AppError::SelectionCancelled),
+        }
     } else {
-        // Mode 3: Current Directory (Default)
+        // Current Directory mode - synchronous loading is fast enough
         let current_dir = std::env::current_dir().map_err(|e| {
             AppError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
@@ -102,17 +107,16 @@ fn run() -> Result<()> {
             ));
         }
 
-        history::load_conversations(&projects_dir, show_last, args.debug)?
-    };
+        let conversations = history::load_conversations(&projects_dir, show_last, args.debug)?;
 
-    if conversations.is_empty() {
-        return Err(AppError::NoHistoryFound("selected scope".to_string()));
-    }
+        if conversations.is_empty() {
+            return Err(AppError::NoHistoryFound("selected scope".to_string()));
+        }
 
-    // Use TUI to select a conversation
-    let selected_path = match tui::run(conversations.clone(), use_relative_time)? {
-        tui::Action::Select(path) => path,
-        tui::Action::Quit => return Err(AppError::SelectionCancelled),
+        match tui::run(conversations.clone(), use_relative_time)? {
+            tui::Action::Select(path) => (conversations, path),
+            tui::Action::Quit => return Err(AppError::SelectionCancelled),
+        }
     };
 
     if args.show_path {
