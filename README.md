@@ -93,6 +93,7 @@ Options:
       --hide-thinking    Hide thinking blocks from the conversation output
   -c, --resume           Resume the selected conversation in Claude Code
   -p, --show-path        Print the selected conversation file path
+      --plain            Output plain text without ledger formatting
       --debug [<LEVEL>]  Print debug information (filter by level: debug, info, warn, error)
   -g, --global           Search all conversations from all projects at once
   -h, --help             Print help
@@ -120,6 +121,23 @@ reasoning process.
 
 If you want to continue a conversation, launch `claude-history` with `--resume`
 and it will hand off to `claude --resume <conversation-id>`.
+
+### plain output mode
+
+Use `--plain` to output conversations without ledger formatting:
+
+```sh
+$ claude-history --plain
+```
+
+This produces simple `Role: content` output without colors or text wrapping,
+suitable for piping to other tools or LLMs:
+
+```
+You: How do I fix this bug?
+
+Claude: Looking at the code, the issue is...
+```
 
 ### global search
 
@@ -155,7 +173,7 @@ history to write more contextual commit messages:
 conversation_context=""
 if [ "$include_history" = true ]; then
     echo "Loading conversation history..."
-    conversation_history=$(claude-history 2>/dev/null)
+    conversation_history=$(claude-history --plain 2>/dev/null)
     if [ -n "$conversation_history" ]; then
         conversation_context="
 
@@ -199,6 +217,9 @@ relative_time = true
 
 # Show thinking blocks (default: false)
 show_thinking = false
+
+# Use plain output without ledger formatting (default: false)
+plain = false
 EOF
 ```
 
@@ -212,6 +233,8 @@ EOF
   (default: false)
 - `show_thinking` (boolean): Show thinking blocks in conversation output
   (default: false)
+- `plain` (boolean): Output plain text without ledger formatting (default:
+  false)
 
 ### overriding config
 
