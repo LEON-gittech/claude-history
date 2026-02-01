@@ -7,6 +7,18 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+/// Represents a JSONL parsing error with context for debugging
+#[derive(Clone, Debug)]
+pub struct ParseError {
+    pub line_number: usize,
+    pub line_content: String,
+    pub error_message: String,
+    /// Lines before the error (up to 2)
+    pub context_before: Vec<String>,
+    /// Lines after the error (up to 2)
+    pub context_after: Vec<String>,
+}
+
 #[derive(Clone)]
 pub struct Conversation {
     pub path: PathBuf,
@@ -20,6 +32,8 @@ pub struct Conversation {
     pub cwd: Option<PathBuf>,
     /// Number of user and assistant messages in the conversation
     pub message_count: usize,
+    /// Parse errors encountered while processing this conversation file
+    pub parse_errors: Vec<ParseError>,
 }
 
 pub struct Project {
@@ -618,6 +632,9 @@ fn process_conversation_file(
     let file = File::open(&path)?;
     let reader = BufReader::new(file);
 
+    // Collect all lines for context access when logging parse errors
+    let lines: Vec<String> = reader.lines().map_while(|l| l.ok()).collect();
+
     let mut all_parts = Vec::new();
     let mut preview_parts = Vec::new();
     let mut user_messages = Vec::new();
@@ -625,63 +642,89 @@ fn process_conversation_file(
     let mut skip_next_assistant = false;
     let mut extracted_cwd: Option<PathBuf> = None;
     let mut message_count: usize = 0;
+    let mut parse_errors: Vec<ParseError> = Vec::new();
 
-    for line in reader.lines() {
-        let line = line?;
+    for (line_idx, line) in lines.iter().enumerate() {
         if line.trim().is_empty() {
             continue;
         }
 
-        if let Ok(entry) = serde_json::from_str::<LogEntry>(&line) {
-            // Extract text content
-            match entry {
-                LogEntry::User { message, cwd, .. } => {
-                    // Extract cwd from the first user message that has it
-                    if extracted_cwd.is_none()
-                        && let Some(cwd_str) = cwd
-                    {
-                        extracted_cwd = Some(PathBuf::from(cwd_str));
-                    }
+        match serde_json::from_str::<LogEntry>(line) {
+            Ok(entry) => {
+                // Extract text content
+                match entry {
+                    LogEntry::User { message, cwd, .. } => {
+                        // Extract cwd from the first user message that has it
+                        if extracted_cwd.is_none()
+                            && let Some(cwd_str) = cwd
+                        {
+                            extracted_cwd = Some(PathBuf::from(cwd_str));
+                        }
 
-                    let text = extract_text_from_user(&message);
-                    if text.is_empty() {
-                        continue;
-                    }
+                        let text = extract_text_from_user(&message);
+                        if text.is_empty() {
+                            continue;
+                        }
 
-                    user_messages.push(text.clone());
+                        user_messages.push(text.clone());
 
-                    if is_clear_metadata_message(&text) {
-                        continue;
-                    }
+                        if is_clear_metadata_message(&text) {
+                            continue;
+                        }
 
-                    all_parts.push(text.clone());
-
-                    // Check if this is a warmup message (first user message is "Warmup")
-                    let is_warmup = !seen_real_user_message && text.trim() == "Warmup";
-                    if is_warmup {
-                        skip_next_assistant = true;
-                    } else {
-                        message_count += 1;
-                        preview_parts.push(text);
-                        seen_real_user_message = true;
-                    }
-                }
-                LogEntry::Assistant { message, .. } => {
-                    let text = extract_text_from_assistant(&message);
-                    if !text.is_empty() {
                         all_parts.push(text.clone());
 
-                        // Skip this assistant message if it follows a warmup user message
-                        if skip_next_assistant {
-                            skip_next_assistant = false;
-                        } else if seen_real_user_message {
-                            // Only add assistant messages to preview after we've seen a real user message
+                        // Check if this is a warmup message (first user message is "Warmup")
+                        let is_warmup = !seen_real_user_message && text.trim() == "Warmup";
+                        if is_warmup {
+                            skip_next_assistant = true;
+                        } else {
                             message_count += 1;
                             preview_parts.push(text);
+                            seen_real_user_message = true;
                         }
                     }
+                    LogEntry::Assistant { message, .. } => {
+                        let text = extract_text_from_assistant(&message);
+                        if !text.is_empty() {
+                            all_parts.push(text.clone());
+
+                            // Skip this assistant message if it follows a warmup user message
+                            if skip_next_assistant {
+                                skip_next_assistant = false;
+                            } else if seen_real_user_message {
+                                // Only add assistant messages to preview after we've seen a real user message
+                                message_count += 1;
+                                preview_parts.push(text);
+                            }
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
+            }
+            Err(e) => {
+                // Capture parse error with surrounding context
+                let start = line_idx.saturating_sub(2);
+                let context_before: Vec<String> = lines[start..line_idx].to_vec();
+                let end = (line_idx + 3).min(lines.len());
+                let context_after: Vec<String> = lines[line_idx + 1..end].to_vec();
+
+                parse_errors.push(ParseError {
+                    line_number: line_idx + 1, // 1-indexed for display
+                    line_content: line.clone(),
+                    error_message: e.to_string(),
+                    context_before,
+                    context_after,
+                });
+
+                if debug {
+                    eprintln!(
+                        "[DEBUG] Parse error in {} at line {}: {}",
+                        filename,
+                        line_idx + 1,
+                        e
+                    );
+                }
             }
         }
     }
@@ -747,6 +790,7 @@ fn process_conversation_file(
         project_path: None,
         cwd: extracted_cwd,
         message_count,
+        parse_errors,
     }))
 }
 

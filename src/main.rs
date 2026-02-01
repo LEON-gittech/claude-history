@@ -1,6 +1,7 @@
 mod claude;
 mod cli;
 mod config;
+mod debug_log;
 mod display;
 mod error;
 mod history;
@@ -134,6 +135,20 @@ fn run() -> Result<()> {
         let project_path = conv.and_then(|c| c.project_path.as_ref());
         resume_with_claude(&selected_path, project_path)?;
         return Ok(());
+    }
+
+    // Log parse errors to debug log if debug mode is enabled
+    if args.debug
+        && let Some(conv) = conversations.iter().find(|c| c.path == selected_path)
+    {
+        if let Err(e) = debug_log::log_parse_errors(conv) {
+            eprintln!("[DEBUG] Failed to write parse errors to log: {}", e);
+        } else if !conv.parse_errors.is_empty() {
+            eprintln!(
+                "[DEBUG] Logged {} parse error(s) to ~/.local/state/claude-history/debug.log",
+                conv.parse_errors.len()
+            );
+        }
     }
 
     // Display the selected conversation (pass the negative form for no_tools)
