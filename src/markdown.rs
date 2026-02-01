@@ -227,7 +227,10 @@ impl MarkdownRenderer {
     }
 
     fn soft_break(&mut self) {
-        self.pending_text.push(' ');
+        // Preserve line breaks instead of converting to space (standard markdown behavior)
+        // For conversation display, users expect their line breaks to be kept
+        self.flush_pending();
+        self.output.push('\n');
     }
 
     fn hard_break(&mut self) {
