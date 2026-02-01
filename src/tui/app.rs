@@ -283,10 +283,19 @@ impl App {
         // Remove from conversations
         self.conversations.remove(conv_idx);
 
-        // Remove from searchable if it's populated (empty during loading)
-        if conv_idx < self.searchable.len() {
-            self.searchable.remove(conv_idx);
-        }
+        // Remove from searchable and update indices
+        // Note: searchable is not ordered by index due to parallel collection,
+        // so we can't use positional removal - must find by index value
+        self.searchable.retain_mut(|s| {
+            if s.index == conv_idx {
+                false // Remove this entry
+            } else {
+                if s.index > conv_idx {
+                    s.index -= 1; // Adjust index for removed item
+                }
+                true
+            }
+        });
 
         // Update filtered: remove the deleted index and decrement all indices > conv_idx
         self.filtered.retain(|&idx| idx != conv_idx);
