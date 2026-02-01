@@ -30,6 +30,12 @@ pub enum LogEntry {
         is_snapshot_update: bool,
     },
     #[allow(dead_code)]
+    Progress {
+        data: serde_json::Value,
+        #[serde(flatten)]
+        extra: serde_json::Value,
+    },
+    #[allow(dead_code)]
     System {
         subtype: String,
         level: String,

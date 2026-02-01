@@ -34,8 +34,9 @@ fn display_entry(entry: &LogEntry, no_tools: bool, show_thinking: bool) {
     match entry {
         LogEntry::Summary { .. }
         | LogEntry::FileHistorySnapshot { .. }
-        | LogEntry::System { .. } => {
-            // Skip summary, file history snapshot, and system entries
+        | LogEntry::System { .. }
+        | LogEntry::Progress { .. } => {
+            // Skip metadata entries (summary, file history snapshot, system, progress)
         }
         LogEntry::User { message, .. } => match &message.content {
             UserContent::String(text) => {
