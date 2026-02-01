@@ -84,12 +84,14 @@ fn render_search_bar(frame: &mut Frame, app: &App, area: Rect) {
 
 fn render_list(frame: &mut Frame, app: &App, area: Rect) {
     let width = area.width as usize;
-    let query_lower = app.query().trim().to_lowercase();
+    // Normalize query and split into words once for the entire render pass
+    let query_normalized = normalize_for_search(app.query().trim());
+    let query_words: Vec<&str> = query_normalized.split_whitespace().collect();
 
     // Calculate visible range FIRST (before building any items)
     // When searching, items may have 4 lines (with context), so use 4 lines per item
     // to ensure the offset calculation matches the actual rendered heights
-    let lines_per_item = if query_lower.is_empty() {
+    let lines_per_item = if query_words.is_empty() {
         LINES_PER_ITEM // 3 lines: header, preview, separator
     } else {
         4 // 4 lines: header, preview, context (optional but reserve space), separator
@@ -174,7 +176,7 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
             let mut header_spans = vec![Span::styled(indicator.to_string(), indicator_style)];
             header_spans.extend(highlight_text(
                 &project_part,
-                &query_lower,
+                &query_words,
                 project_style,
                 highlight_style,
             ));
@@ -212,7 +214,7 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
             let mut preview_spans = vec![Span::styled(indicator.to_string(), indicator_style)];
             preview_spans.extend(highlight_text(
                 &truncated_preview,
-                &query_lower,
+                &query_words,
                 preview_style,
                 highlight_style,
             ));
@@ -220,9 +222,9 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
             let preview = Line::from(preview_spans).style(selection_bg);
 
             // Check for hidden matches and build context line if needed
-            let context_line = if !query_lower.is_empty() {
+            let context_line = if !query_words.is_empty() {
                 if let Some((match_pos, match_char_len)) =
-                    find_hidden_match(&conv.full_text, &truncated_preview, &query_lower)
+                    find_hidden_match(&conv.full_text, &truncated_preview, &query_words)
                 {
                     let context_width = width.saturating_sub(4); // Account for indicator
                     let context_text = extract_match_context(
@@ -251,7 +253,7 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
                         vec![Span::styled(indicator.to_string(), indicator_style)];
                     context_spans.extend(highlight_text(
                         &truncated_context,
-                        &query_lower,
+                        &query_words,
                         context_base_style,
                         context_highlight_style,
                     ));
@@ -326,17 +328,10 @@ fn sanitize_preview(text: &str) -> String {
 /// Split text into spans with matched portions highlighted (case-insensitive)
 fn highlight_text(
     text: &str,
-    query_lower: &str,
+    query_words: &[&str],
     base_style: Style,
     highlight_style: Style,
 ) -> Vec<Span<'static>> {
-    if query_lower.is_empty() {
-        return vec![Span::styled(text.to_string(), base_style)];
-    }
-
-    // Normalize query (replace underscores with spaces)
-    let query_normalized = normalize_for_search(query_lower);
-    let query_words: Vec<&str> = query_normalized.split_whitespace().collect();
     if query_words.is_empty() {
         return vec![Span::styled(text.to_string(), base_style)];
     }
@@ -379,7 +374,7 @@ fn highlight_text(
             let word_lower = original_word.to_lowercase();
 
             // Check if any query word is a prefix of this word
-            let matched_query = query_words.iter().find(|qw| word_lower.starts_with(*qw));
+            let matched_query = query_words.iter().find(|&&qw| word_lower.starts_with(qw));
 
             if let Some(qw) = matched_query {
                 // Add non-highlighted text before this word
@@ -432,14 +427,11 @@ fn highlight_text(
 
 /// Find the first match in full_text that is NOT visible in the preview.
 /// Returns (byte_offset, matched_word_char_len) or None if all matches are visible.
-fn find_hidden_match(full_text: &str, preview: &str, query_lower: &str) -> Option<(usize, usize)> {
-    if query_lower.is_empty() {
-        return None;
-    }
-
-    // Normalize query
-    let query_normalized = normalize_for_search(query_lower);
-    let query_words: Vec<&str> = query_normalized.split_whitespace().collect();
+fn find_hidden_match(
+    full_text: &str,
+    preview: &str,
+    query_words: &[&str],
+) -> Option<(usize, usize)> {
     if query_words.is_empty() {
         return None;
     }
@@ -473,7 +465,7 @@ fn find_hidden_match(full_text: &str, preview: &str, query_lower: &str) -> Optio
                 let word = &text[start_byte..end_byte];
                 let word_lower = word.to_lowercase();
 
-                if query_words.iter().any(|qw| word_lower.starts_with(qw)) {
+                if query_words.iter().any(|&qw| word_lower.starts_with(qw)) {
                     count += 1;
                 }
             }
@@ -519,7 +511,7 @@ fn find_hidden_match(full_text: &str, preview: &str, query_lower: &str) -> Optio
             let word = &full_text[start_byte..end_byte];
             let word_lower = word.to_lowercase();
 
-            if let Some(qw) = query_words.iter().find(|qw| word_lower.starts_with(*qw)) {
+            if let Some(&qw) = query_words.iter().find(|&&qw| word_lower.starts_with(qw)) {
                 match_count += 1;
                 if match_count > preview_matches {
                     // Return byte offset and the matched prefix length
