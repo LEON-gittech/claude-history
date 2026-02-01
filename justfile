@@ -38,6 +38,10 @@ clippy-fix:
 build:
     cargo build --all
 
+# Install debug binary globally via symlink
+install-dev:
+    cargo build && ln -sf $(pwd)/target/debug/claude-history ~/.cargo/bin/claude-history
+
 # Run the application
 run *ARGS:
     cargo run -- "$@"
