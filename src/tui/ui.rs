@@ -131,7 +131,7 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
             header_spans.push(Span::raw(" ".repeat(padding)));
             header_spans.push(Span::styled(
                 timestamp,
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(Color::Rgb(140, 140, 140)),
             ));
 
             let header = Line::from(header_spans).style(selection_bg);
