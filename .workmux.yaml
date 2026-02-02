@@ -1,2 +1,6 @@
 pre_merge:
   - just check-ci
+
+files:
+  symlink:
+    - history
