@@ -70,20 +70,25 @@ fn render_user_message(
     message: &crate::claude::UserMessage,
     options: &RenderOptions,
 ) {
-    // Extract text from user message
+    // Extract text from user message, collecting all text blocks
     let text = match &message.content {
         UserContent::String(s) => process_command_message(s),
         UserContent::Blocks(blocks) => {
-            let mut result = None;
-            for block in blocks {
-                if let ContentBlock::Text { text } = block
-                    && let Some(processed) = process_command_message(text)
-                {
-                    result = Some(processed);
-                    break;
-                }
+            let texts: Vec<String> = blocks
+                .iter()
+                .filter_map(|block| {
+                    if let ContentBlock::Text { text } = block {
+                        process_command_message(text)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if texts.is_empty() {
+                None
+            } else {
+                Some(texts.join("\n\n"))
             }
-            result
         }
     };
 

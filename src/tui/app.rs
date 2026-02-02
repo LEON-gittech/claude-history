@@ -567,13 +567,13 @@ impl App {
 
             // Toggle tools
             KeyCode::Char('t') => {
-                self.toggle_view_tools();
+                self.toggle_view_tools(viewport_height);
                 None
             }
 
             // Toggle thinking
             KeyCode::Char('T') => {
-                self.toggle_view_thinking();
+                self.toggle_view_thinking(viewport_height);
                 None
             }
 
@@ -953,23 +953,23 @@ impl App {
     }
 
     /// Toggle tools visibility in view mode
-    fn toggle_view_tools(&mut self) {
+    fn toggle_view_tools(&mut self, viewport_height: usize) {
         if let AppMode::View(ref mut state) = self.app_mode {
             state.show_tools = !state.show_tools;
-            self.re_render_view();
+            self.re_render_view(viewport_height);
         }
     }
 
     /// Toggle thinking visibility in view mode
-    fn toggle_view_thinking(&mut self) {
+    fn toggle_view_thinking(&mut self, viewport_height: usize) {
         if let AppMode::View(ref mut state) = self.app_mode {
             state.show_thinking = !state.show_thinking;
-            self.re_render_view();
+            self.re_render_view(viewport_height);
         }
     }
 
     /// Re-render the view with current toggle settings
-    fn re_render_view(&mut self) {
+    fn re_render_view(&mut self, viewport_height: usize) {
         use crate::tui::viewer::{RenderOptions, render_conversation};
 
         if let AppMode::View(ref mut state) = self.app_mode {
@@ -983,21 +983,45 @@ impl App {
                 let old_scroll = state.scroll_offset;
                 state.total_lines = lines.len();
                 state.rendered_lines = lines;
+
                 // Clamp scroll offset to new content bounds
-                let viewport_height = 20; // Approximate, will be corrected on next frame
                 let max_scroll = state.total_lines.saturating_sub(viewport_height);
                 state.scroll_offset = old_scroll.min(max_scroll);
+
+                // Recompute search matches for new content
+                if state.search_mode == ViewSearchMode::Active && !state.search_query.is_empty() {
+                    let query_lower = state.search_query.to_lowercase();
+                    state.search_matches = state
+                        .rendered_lines
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, line)| {
+                            line.spans
+                                .iter()
+                                .any(|(text, _)| text.to_lowercase().contains(&query_lower))
+                        })
+                        .map(|(i, _)| i)
+                        .collect();
+
+                    // Clamp current_match to valid range
+                    if state.search_matches.is_empty() {
+                        state.current_match = 0;
+                    } else {
+                        state.current_match =
+                            state.current_match.min(state.search_matches.len() - 1);
+                    }
+                }
             }
         }
     }
 
     /// Check if view needs re-render due to width change
-    pub fn check_view_resize(&mut self, new_content_width: usize) {
+    pub fn check_view_resize(&mut self, new_content_width: usize, viewport_height: usize) {
         if let AppMode::View(ref mut state) = self.app_mode
             && state.content_width != new_content_width
         {
             state.content_width = new_content_width;
-            self.re_render_view();
+            self.re_render_view(viewport_height);
         }
     }
 }
@@ -1060,15 +1084,16 @@ pub fn run(conversations: Vec<Conversation>, use_relative_time: bool) -> Result<
         let content_width = (frame_area.width as usize).saturating_sub(NAME_WIDTH + 3);
 
         // Check for resize in view mode
-        app.check_view_resize(content_width);
+        app.check_view_resize(content_width, viewport_height);
 
         guard.terminal.draw(|frame| ui::render(frame, &app))?;
 
         if let Event::Key(key) = event::read().map_err(|e| AppError::Io(io::Error::other(e)))? {
             // Only handle key press events (not release)
             if key.kind == KeyEventKind::Press {
-                // Check for Enter in list mode - enter view mode
+                // Check for Enter in list mode - enter view mode (but not during dialogs)
                 if matches!(app.app_mode(), AppMode::List)
+                    && *app.dialog_mode() == DialogMode::None
                     && key.code == KeyCode::Enter
                     && !app.is_loading()
                     && app.selected().is_some()
@@ -1175,7 +1200,7 @@ pub fn run_with_loader(
         let content_width = (frame_area.width as usize).saturating_sub(NAME_WIDTH + 3);
 
         // Check for resize in view mode
-        app.check_view_resize(content_width);
+        app.check_view_resize(content_width, viewport_height);
 
         // Render current state
         guard.terminal.draw(|frame| ui::render(frame, &app))?;
@@ -1185,8 +1210,9 @@ pub fn run_with_loader(
             && let Event::Key(key) = event::read().map_err(|e| AppError::Io(io::Error::other(e)))?
             && key.kind == KeyEventKind::Press
         {
-            // Check for Enter in list mode - enter view mode
+            // Check for Enter in list mode - enter view mode (but not during dialogs)
             if matches!(app.app_mode(), AppMode::List)
+                && *app.dialog_mode() == DialogMode::None
                 && key.code == KeyCode::Enter
                 && !app.is_loading()
                 && app.selected().is_some()
