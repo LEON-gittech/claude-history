@@ -589,6 +589,28 @@ impl App {
                 None
             }
 
+            // Copy path to clipboard
+            KeyCode::Char('Y') => {
+                if let AppMode::View(ref state) = self.app_mode {
+                    let path_str = state.conversation_path.display().to_string();
+                    match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(&path_str)) {
+                        Ok(()) => {
+                            self.status_message = Some((
+                                "Path copied to clipboard".to_string(),
+                                std::time::Instant::now(),
+                            ));
+                        }
+                        Err(e) => {
+                            self.status_message = Some((
+                                format!("Clipboard error: {}", e),
+                                std::time::Instant::now(),
+                            ));
+                        }
+                    }
+                }
+                None
+            }
+
             // Ctrl+D - delete (same as list mode)
             KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
                 self.dialog_mode = DialogMode::ConfirmDelete;
