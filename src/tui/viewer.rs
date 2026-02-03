@@ -109,8 +109,15 @@ fn render_user_message(
         for block in blocks {
             if let ContentBlock::ToolResult { content, .. } = block {
                 render_ledger_block_plain(lines, "Tool", DIM_TEAL, false, "<Result>");
-                let content_str = format_tool_result_content(content.as_ref());
-                render_continuation(lines, &content_str);
+                match extract_tool_result_text(content.as_ref()) {
+                    Some(text) => {
+                        render_markdown_continuation(lines, &text, options.content_width);
+                    }
+                    None => {
+                        let content_str = format_tool_result_content(content.as_ref());
+                        render_continuation(lines, &content_str);
+                    }
+                }
                 printed = true;
             }
         }
@@ -121,26 +128,33 @@ fn render_user_message(
     }
 }
 
-/// Format tool result content to a string for display
+/// Extract text content from tool result for markdown rendering.
+/// Returns Some(text) if content is a string or array of text blocks.
+/// Returns None for JSON structures that should be pretty-printed instead.
+fn extract_tool_result_text(content: Option<&serde_json::Value>) -> Option<String> {
+    match content {
+        Some(serde_json::Value::String(s)) => Some(s.clone()),
+        Some(serde_json::Value::Array(arr)) => {
+            // Handle array of content blocks (e.g., [{type: "text", text: "..."}])
+            let texts: Vec<&str> = arr
+                .iter()
+                .filter_map(|item| item.get("text").and_then(|t| t.as_str()))
+                .collect();
+            if !texts.is_empty() {
+                Some(texts.join("\n\n"))
+            } else {
+                None // Array without text blocks - render as JSON
+            }
+        }
+        _ => None, // Objects, null, etc. - render as JSON
+    }
+}
+
+/// Format tool result content to a string for display (non-text content)
 fn format_tool_result_content(content: Option<&serde_json::Value>) -> String {
     match content {
         Some(value) => {
-            if let Some(s) = value.as_str() {
-                s.to_string()
-            } else if let Some(arr) = value.as_array() {
-                // Handle array of content blocks (e.g., [{type: "text", text: "..."}])
-                let texts: Vec<&str> = arr
-                    .iter()
-                    .filter_map(|item| item.get("text").and_then(|t| t.as_str()))
-                    .collect();
-                if !texts.is_empty() {
-                    texts.join("\n\n")
-                } else if let Ok(formatted) = serde_json::to_string_pretty(value) {
-                    formatted
-                } else {
-                    "<invalid content>".to_string()
-                }
-            } else if let Ok(formatted) = serde_json::to_string_pretty(value) {
+            if let Ok(formatted) = serde_json::to_string_pretty(value) {
                 formatted
             } else {
                 "<invalid content>".to_string()
@@ -698,6 +712,34 @@ fn render_continuation(lines: &mut Vec<RenderedLine>, text: &str) {
                 },
             ),
         ];
+
+        lines.push(RenderedLine { spans });
+    }
+}
+
+/// Render markdown content as continuation lines (no name column)
+fn render_markdown_continuation(lines: &mut Vec<RenderedLine>, text: &str, content_width: usize) {
+    let styled_lines = render_markdown_to_lines(text, content_width);
+
+    for styled_line in styled_lines {
+        let mut spans = Vec::new();
+
+        // Empty name column
+        spans.push((" ".repeat(NAME_WIDTH), LineStyle::default()));
+
+        // Separator
+        spans.push((
+            " │ ".to_string(),
+            LineStyle {
+                fg: Some(SEPARATOR_COLOR),
+                ..Default::default()
+            },
+        ));
+
+        // Content spans from markdown rendering
+        for (text, style) in styled_line.spans {
+            spans.push((text, style));
+        }
 
         lines.push(RenderedLine { spans });
     }
