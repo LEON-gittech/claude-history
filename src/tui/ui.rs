@@ -134,10 +134,9 @@ fn header_fits_single_line(conv: &crate::history::Conversation, terminal_width: 
     // timestamp is "YYYY-MM-DD HH:MM" = 16 chars
     let timestamp_len = 16;
 
-    // Format: "  [project] msg_count · timestamp · summary"
-    // Breakdown: 2 (indent) + 1 ([) + project + 1 (]) + 1 (space) + msg_count + 3 ( · ) + timestamp + 3 ( · ) + summary
-    let total_len =
-        2 + 1 + project.len() + 1 + 1 + msg_count_len + 3 + timestamp_len + 3 + summary.len();
+    // Format: "  project · msg_count · timestamp · summary"
+    // Breakdown: 2 (indent) + project + 3 ( · ) + msg_count + 3 ( · ) + timestamp + 3 ( · ) + summary
+    let total_len = 2 + project.len() + 3 + msg_count_len + 3 + timestamp_len + 3 + summary.len();
 
     total_len <= terminal_width as usize
 }
@@ -235,10 +234,10 @@ fn render_view_header(frame: &mut Frame, app: &App, state: &ViewState, area: Rec
         vec![Line::from(vec![
             Span::raw("  "),
             Span::styled(
-                format!("[{}]", project),
+                project.clone(),
                 Style::default().fg(Color::Rgb(78, 201, 176)).bold(),
             ),
-            Span::raw(" "),
+            Span::raw(" · "),
             Span::styled(msg_count, Style::default().fg(Color::Rgb(140, 140, 140))),
             Span::raw(" · "),
             Span::styled(timestamp, Style::default().fg(Color::Rgb(140, 140, 140))),
@@ -253,10 +252,10 @@ fn render_view_header(frame: &mut Frame, app: &App, state: &ViewState, area: Rec
         let mut lines = vec![Line::from(vec![
             Span::raw("  "),
             Span::styled(
-                format!("[{}]", project),
+                project.clone(),
                 Style::default().fg(Color::Rgb(78, 201, 176)).bold(),
             ),
-            Span::raw(" "),
+            Span::raw(" · "),
             Span::styled(msg_count, Style::default().fg(Color::Rgb(140, 140, 140))),
             Span::raw(" · "),
             Span::styled(timestamp, Style::default().fg(Color::Rgb(140, 140, 140))),
