@@ -318,7 +318,7 @@ fn render_view_content(frame: &mut Frame, state: &ViewState, area: Rect) {
 fn render_view_status_bar(frame: &mut Frame, app: &App, state: &ViewState, area: Rect) {
     // Check for status message first
     if let Some((msg, instant)) = app.status_message()
-        && instant.elapsed() < std::time::Duration::from_secs(3)
+        && instant.elapsed() < STATUS_TTL
     {
         let status_line = Line::from(vec![
             Span::raw("  "),
@@ -374,6 +374,10 @@ fn render_view_status_bar(frame: &mut Frame, app: &App, state: &ViewState, area:
             Span::styled("xport  ", label_style),
             Span::styled("y", key_style),
             Span::styled("ank  ", label_style),
+            Span::styled("^R", key_style),
+            Span::styled(" resume  ", label_style),
+            Span::styled("^X", key_style),
+            Span::styled(" del  ", label_style),
             Span::styled("q", key_style),
             Span::styled("uit", label_style),
         ]);
