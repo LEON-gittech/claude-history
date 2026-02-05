@@ -1,6 +1,6 @@
 # claude-history
 
-<img src="meta/claude-history-demo.gif" width="747">
+<img src="/meta/screenshot.webp" />
 
 `claude-history` is a companion CLI for Claude Code. It lets you search recent
 conversations recorded in Claude's local project history with a built-in
@@ -66,27 +66,27 @@ preview.
 
 ### Keyboard navigation (Viewer mode)
 
-| Key                     | Action                                              |
-| ----------------------- | --------------------------------------------------- |
-| `j` / `↓`               | Scroll down                                         |
-| `k` / `↑`               | Scroll up                                           |
-| `d` / `Ctrl+D`          | Half page down                                      |
-| `u` / `Ctrl+U`          | Half page up                                        |
-| `Page Down`             | Full page down                                      |
-| `Page Up`               | Full page up                                        |
-| `g` / `Home`            | Jump to top                                         |
-| `G` / `End`             | Jump to bottom                                      |
-| `/`                     | Start search                                        |
-| `n`                     | Next search match                                   |
-| `N`                     | Previous search match                               |
-| `t`                     | Toggle tool calls                                   |
-| `T`                     | Toggle thinking                                     |
-| `p`                     | Show file path                                      |
-| `Ctrl+R`                | Resume conversation                                 |
-| `Ctrl+X`                | Delete conversation                                 |
-| `?`                     | Show keyboard shortcuts                             |
-| `q` / `Esc`             | Return to list (or quit in direct file input mode) |
-| `Ctrl+C`                | Quit                                                |
+| Key            | Action                                             |
+| -------------- | -------------------------------------------------- |
+| `j` / `↓`      | Scroll down                                        |
+| `k` / `↑`      | Scroll up                                          |
+| `d` / `Ctrl+D` | Half page down                                     |
+| `u` / `Ctrl+U` | Half page up                                       |
+| `Page Down`    | Full page down                                     |
+| `Page Up`      | Full page up                                       |
+| `g` / `Home`   | Jump to top                                        |
+| `G` / `End`    | Jump to bottom                                     |
+| `/`            | Start search                                       |
+| `n`            | Next search match                                  |
+| `N`            | Previous search match                              |
+| `t`            | Toggle tool calls                                  |
+| `T`            | Toggle thinking                                    |
+| `p`            | Show file path                                     |
+| `Ctrl+R`       | Resume conversation                                |
+| `Ctrl+X`       | Delete conversation                                |
+| `?`            | Show keyboard shortcuts                            |
+| `q` / `Esc`    | Return to list (or quit in direct file input mode) |
+| `Ctrl+C`       | Quit                                               |
 
 ### Search
 
@@ -122,6 +122,7 @@ Press `Enter` on a conversation to open the built-in viewer. The viewer displays
 conversations in a ledger-style format with scrolling support.
 
 **Features:**
+
 - **Scrolling**: Navigate with vim-style keys (`j`/`k`) or arrow keys
 - **Search**: Press `/` to search within the conversation, then `n`/`N` to
   navigate matches
@@ -196,6 +197,7 @@ default_args = ["--dangerously-skip-permissions"]
 ```
 
 With this configuration, when you resume a conversation, it will run:
+
 ```sh
 claude --resume <conversation-id> --dangerously-skip-permissions
 ```
