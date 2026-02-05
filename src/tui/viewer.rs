@@ -738,7 +738,7 @@ fn render_ledger_block_styled(
         // Timestamp prefix if provided
         if let Some(ts) = timestamp {
             spans.push((
-                format!("{} ", ts),
+                format!(" {} ", ts),
                 LineStyle {
                     fg: Some((140, 140, 140)),
                     dimmed: false,
