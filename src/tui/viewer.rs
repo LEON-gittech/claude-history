@@ -117,6 +117,7 @@ fn render_user_message(
     timestamp: Option<&str>,
 ) {
     let mut printed = false;
+    let mut ts_remaining = timestamp;
 
     // Extract text from user message, collecting all text blocks
     let text = match &message.content {
@@ -142,8 +143,9 @@ fn render_user_message(
 
     if let Some(text) = text {
         let md_lines = render_markdown_to_lines(&text, options.content_width);
-        render_ledger_block_styled(lines, "You", WHITE, true, md_lines, timestamp);
+        render_ledger_block_styled(lines, "You", WHITE, true, md_lines, ts_remaining);
         printed = true;
+        ts_remaining = None;
     }
 
     // Tool results (if enabled)
@@ -156,12 +158,17 @@ fn render_user_message(
                     Some(text) => text,
                     None => format_tool_result_content(content.as_ref()),
                 };
-                render_tool_result(
-                    lines,
-                    &content_str,
-                    options.content_width,
-                    options.show_timing,
-                );
+                // Pass timestamp to first tool result if no text block consumed it
+                let ts = if ts_remaining.is_some() {
+                    let t = ts_remaining;
+                    ts_remaining = None;
+                    t
+                } else if options.show_timing {
+                    Some("     ")
+                } else {
+                    None
+                };
+                render_tool_result(lines, &content_str, options.content_width, ts);
                 printed = true;
             }
         }
@@ -215,17 +222,18 @@ fn render_assistant_message(
     timestamp: Option<&str>,
 ) {
     let mut printed = false;
-    let mut first_block = true;
+    let mut ts_remaining = timestamp;
 
     // Text blocks
     for block in &message.content {
         if let ContentBlock::Text { text } = block {
             let md_lines = render_markdown_to_lines(text, options.content_width);
-            // Only show timestamp on first block
-            let ts = if first_block { timestamp } else { None };
-            render_ledger_block_styled(lines, "Claude", TEAL, true, md_lines, ts);
+            render_ledger_block_styled(lines, "Claude", TEAL, true, md_lines, ts_remaining);
             printed = true;
-            first_block = false;
+            // After first block consumes the timestamp, use blank padding for alignment
+            if ts_remaining.is_some() {
+                ts_remaining = None;
+            }
         }
     }
 
@@ -233,6 +241,16 @@ fn render_assistant_message(
     if options.show_tools {
         for block in &message.content {
             if let ContentBlock::ToolUse { name, input, .. } = block {
+                // Pass timestamp to first tool call if no text block consumed it
+                let ts = if ts_remaining.is_some() {
+                    let t = ts_remaining;
+                    ts_remaining = None;
+                    t
+                } else if options.show_timing {
+                    Some("     ")
+                } else {
+                    None
+                };
                 render_tool_call(
                     lines,
                     name,
@@ -241,7 +259,7 @@ fn render_assistant_message(
                     DIM_TEAL,
                     false,
                     options.content_width,
-                    options.show_timing,
+                    ts,
                 );
                 printed = true;
             }
@@ -254,20 +272,17 @@ fn render_assistant_message(
             if let ContentBlock::Thinking { thinking, .. } = block {
                 let md_lines = render_markdown_to_lines(thinking, options.content_width);
                 let styled_lines = apply_thinking_style(md_lines);
-                // Pass blank timestamp for alignment when timing is on
-                let align_ts = if options.show_timing {
+                // Pass timestamp if no previous block consumed it
+                let ts = if ts_remaining.is_some() {
+                    let t = ts_remaining;
+                    ts_remaining = None;
+                    t
+                } else if options.show_timing {
                     Some("     ")
                 } else {
                     None
                 };
-                render_ledger_block_styled(
-                    lines,
-                    "Thinking",
-                    DIM_TEAL,
-                    false,
-                    styled_lines,
-                    align_ts,
-                );
+                render_ledger_block_styled(lines, "Thinking", DIM_TEAL, false, styled_lines, ts);
                 printed = true;
             }
         }
@@ -782,15 +797,23 @@ fn render_tool_call(
     label_color: (u8, u8, u8),
     dimmed: bool,
     content_width: usize,
-    show_timing: bool,
+    timestamp: Option<&str>,
 ) {
     let formatted = tool_format::format_tool_call(name, input, content_width);
 
     let mut spans = Vec::new();
 
-    // Timing alignment padding (if timing is enabled)
-    if show_timing {
-        spans.push((" ".repeat(TIMESTAMP_WIDTH), LineStyle::default()));
+    // Timestamp prefix (only on first line if provided)
+    if let Some(ts) = timestamp {
+        spans.push((
+            format!(" {} ", ts),
+            LineStyle {
+                fg: Some((140, 140, 140)),
+                dimmed: false,
+                bold: false,
+                italic: false,
+            },
+        ));
     }
 
     // Name column
@@ -830,7 +853,7 @@ fn render_tool_call(
     if let Some(body) = formatted.body {
         // Empty line between header and body
         let mut empty_spans = Vec::new();
-        if show_timing {
+        if timestamp.is_some() {
             empty_spans.push((" ".repeat(TIMESTAMP_WIDTH), LineStyle::default()));
         }
         empty_spans.push((" ".repeat(NAME_WIDTH), LineStyle::default()));
@@ -843,7 +866,7 @@ fn render_tool_call(
             },
         ));
         lines.push(RenderedLine { spans: empty_spans });
-        render_tool_body(lines, &body, dimmed, show_timing);
+        render_tool_body(lines, &body, dimmed, timestamp.is_some());
     }
 }
 
@@ -908,7 +931,7 @@ fn render_tool_result(
     lines: &mut Vec<RenderedLine>,
     text: &str,
     content_width: usize,
-    show_timing: bool,
+    timestamp: Option<&str>,
 ) {
     // Render markdown
     let styled_lines = render_markdown_to_lines(text, content_width);
@@ -916,8 +939,21 @@ fn render_tool_result(
     for (i, styled_line) in styled_lines.iter().enumerate() {
         let mut spans = Vec::new();
 
-        // Timing alignment padding (if timing is enabled)
-        if show_timing {
+        // Timestamp prefix (only on first line if provided)
+        if i == 0 {
+            if let Some(ts) = timestamp {
+                spans.push((
+                    format!(" {} ", ts),
+                    LineStyle {
+                        fg: Some((140, 140, 140)),
+                        dimmed: false,
+                        bold: false,
+                        italic: false,
+                    },
+                ));
+            }
+        } else if timestamp.is_some() {
+            // Pad continuation lines to align with timestamped first line
             spans.push((" ".repeat(TIMESTAMP_WIDTH), LineStyle::default()));
         }
 
@@ -1049,6 +1085,11 @@ fn render_agent_message(
 
             // Tool calls
             if options.show_tools {
+                let align_ts = if options.show_timing {
+                    Some("     ")
+                } else {
+                    None
+                };
                 for block in blocks {
                     if let ContentBlock::ToolUse { name, input, .. } = block {
                         let label = format!("↳{}", short_id);
@@ -1060,7 +1101,7 @@ fn render_agent_message(
                             DIM_TEAL,
                             true,
                             options.content_width,
-                            options.show_timing,
+                            align_ts,
                         );
                         printed = true;
                     }
