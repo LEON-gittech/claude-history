@@ -1,5 +1,5 @@
 use crate::tui::app::{
-    App, AppMode, DialogMode, LineStyle, LoadingState, ViewSearchMode, ViewState,
+    App, AppMode, DialogMode, LineStyle, LoadingState, RenderedLine, ViewSearchMode, ViewState,
 };
 use crate::tui::search::is_word_separator;
 use chrono::{DateTime, Local};
@@ -482,17 +482,15 @@ fn render_view_content(frame: &mut Frame, state: &ViewState, area: Rect) {
             let is_current_match = state.search_matches.get(state.current_match) == Some(&line_idx);
             let has_match = !query_lower.is_empty() && state.search_matches.contains(&line_idx);
 
-            let spans: Vec<Span> = rendered
-                .spans
-                .iter()
-                .flat_map(|(text, style)| {
-                    if has_match && !query_lower.is_empty() {
-                        highlight_search_matches(text, &query_lower, style, is_current_match)
-                    } else {
-                        vec![styled_span(text, style)]
-                    }
-                })
-                .collect();
+            let spans: Vec<Span> = if has_match && !query_lower.is_empty() {
+                highlight_line_matches(rendered, &query_lower, is_current_match)
+            } else {
+                rendered
+                    .spans
+                    .iter()
+                    .map(|(text, style)| styled_span(text, style))
+                    .collect()
+            };
 
             Line::from(spans)
         })
@@ -607,65 +605,133 @@ fn render_search_input(frame: &mut Frame, state: &ViewState, area: Rect) {
     frame.set_cursor_position(Position::new(cursor_x, area.y));
 }
 
-fn highlight_search_matches(
-    text: &str,
+/// Highlight search matches across the full line text, handling matches that span
+/// across multiple styled spans. Works by finding match positions in the concatenated
+/// line text, then rebuilding spans with highlights applied at the correct positions.
+fn highlight_line_matches(
+    rendered: &RenderedLine,
     query: &str,
-    style: &LineStyle,
     is_current_match: bool,
 ) -> Vec<Span<'static>> {
-    let mut spans = Vec::new();
-    let text_lower = text.to_lowercase();
-    let mut last_end = 0;
+    // Concatenate all span texts to get the full line
+    let full_text: String = rendered
+        .spans
+        .iter()
+        .map(|(text, _)| text.as_str())
+        .collect();
+    let full_lower = full_text.to_lowercase();
 
-    // Use char indices to handle Unicode correctly
-    let chars: Vec<char> = text.chars().collect();
-    let chars_lower: Vec<char> = text_lower.chars().collect();
+    // Find match positions using char indices to safely handle Unicode
+    // (lowercasing can change byte lengths for some characters)
+    let orig_chars: Vec<(usize, char)> = full_text.char_indices().collect();
+    let lower_chars: Vec<char> = full_lower.chars().collect();
     let query_chars: Vec<char> = query.chars().collect();
 
-    let mut i = 0;
-    while i <= chars_lower.len().saturating_sub(query_chars.len()) {
-        // Check if query matches at position i
-        let matches = query_chars
-            .iter()
-            .enumerate()
-            .all(|(j, &qc)| i + j < chars_lower.len() && chars_lower[i + j] == qc);
-
-        if matches {
-            // Add text before match
-            if i > last_end {
-                let before: String = chars[last_end..i].iter().collect();
-                spans.push(styled_span(&before, style));
-            }
-
-            // Add matched text with highlight
-            let match_text: String = chars[i..i + query_chars.len()].iter().collect();
-            let match_style = if is_current_match {
-                Style::default().bg(Color::Yellow).fg(Color::Black)
+    let mut match_byte_ranges: Vec<(usize, usize)> = Vec::new();
+    if !query_chars.is_empty() {
+        let mut i = 0;
+        while i + query_chars.len() <= lower_chars.len() {
+            if lower_chars[i..i + query_chars.len()] == query_chars[..] {
+                let start_byte = orig_chars[i].0;
+                let end_byte = if i + query_chars.len() < orig_chars.len() {
+                    orig_chars[i + query_chars.len()].0
+                } else {
+                    full_text.len()
+                };
+                match_byte_ranges.push((start_byte, end_byte));
+                i += query_chars.len();
             } else {
-                Style::default()
-                    .bg(Color::Rgb(78, 201, 176))
-                    .fg(Color::Black)
-            };
-            spans.push(Span::styled(match_text, match_style));
-
-            last_end = i + query_chars.len();
-            i = last_end;
-        } else {
-            i += 1;
+                i += 1;
+            }
         }
     }
 
-    // Add remaining text
-    if last_end < chars.len() {
-        let remaining: String = chars[last_end..].iter().collect();
-        spans.push(styled_span(&remaining, style));
+    if match_byte_ranges.is_empty() {
+        return rendered
+            .spans
+            .iter()
+            .map(|(t, s)| styled_span(t, s))
+            .collect();
     }
 
-    if spans.is_empty() {
-        vec![styled_span(text, style)]
+    let match_style = if is_current_match {
+        Style::default().bg(Color::Yellow).fg(Color::Black)
     } else {
-        spans
+        Style::default()
+            .bg(Color::Rgb(78, 201, 176))
+            .fg(Color::Black)
+    };
+
+    // Build output spans by walking through original spans and splitting at match boundaries
+    let mut result: Vec<Span<'static>> = Vec::new();
+    let mut match_idx = 0;
+    let mut global_offset: usize = 0;
+
+    for (text, style) in &rendered.spans {
+        let span_start = global_offset;
+        let span_end = global_offset + text.len();
+        let base_style = build_style(style);
+        let mut pos = span_start;
+
+        while pos < span_end {
+            // Skip past matches that are entirely before our position
+            while match_idx < match_byte_ranges.len() && match_byte_ranges[match_idx].1 <= pos {
+                match_idx += 1;
+            }
+
+            if match_idx < match_byte_ranges.len() {
+                let (ms, me) = match_byte_ranges[match_idx];
+                if pos >= ms && pos < me {
+                    // Inside a match
+                    let end = me.min(span_end);
+                    result.push(Span::styled(full_text[pos..end].to_string(), match_style));
+                    pos = end;
+                } else if ms < span_end {
+                    // There's a match starting within this span, emit text before it
+                    let end = ms.min(span_end);
+                    if end > pos {
+                        result.push(Span::styled(full_text[pos..end].to_string(), base_style));
+                    }
+                    pos = end;
+                } else {
+                    // No more matches in this span
+                    result.push(Span::styled(
+                        full_text[pos..span_end].to_string(),
+                        base_style,
+                    ));
+                    pos = span_end;
+                }
+            } else {
+                // No more matches at all
+                result.push(Span::styled(
+                    full_text[pos..span_end].to_string(),
+                    base_style,
+                ));
+                pos = span_end;
+            }
+        }
+
+        global_offset = span_end;
     }
+
+    result
+}
+
+fn build_style(style: &LineStyle) -> Style {
+    let mut s = Style::default();
+    if let Some((r, g, b)) = style.fg {
+        s = s.fg(Color::Rgb(r, g, b));
+    }
+    if style.bold {
+        s = s.bold();
+    }
+    if style.italic {
+        s = s.italic();
+    }
+    if style.dimmed {
+        s = s.fg(Color::Rgb(100, 100, 100));
+    }
+    s
 }
 
 fn styled_span(text: &str, style: &LineStyle) -> Span<'static> {

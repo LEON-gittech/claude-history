@@ -1278,11 +1278,7 @@ impl App {
                 .rendered_lines
                 .iter()
                 .enumerate()
-                .filter(|(_, line)| {
-                    line.spans
-                        .iter()
-                        .any(|(text, _)| text.to_lowercase().contains(&query_lower))
-                })
+                .filter(|(_, line)| line_matches_query(line, &query_lower))
                 .map(|(i, _)| i)
                 .collect();
 
@@ -1386,11 +1382,7 @@ impl App {
                         .rendered_lines
                         .iter()
                         .enumerate()
-                        .filter(|(_, line)| {
-                            line.spans
-                                .iter()
-                                .any(|(text, _)| text.to_lowercase().contains(&query_lower))
-                        })
+                        .filter(|(_, line)| line_matches_query(line, &query_lower))
                         .map(|(i, _)| i)
                         .collect();
 
@@ -1420,6 +1412,13 @@ impl App {
 /// RAII guard to ensure terminal is restored on exit
 struct TerminalGuard {
     terminal: Terminal<CrosstermBackend<Stdout>>,
+}
+
+/// Check if a rendered line matches the search query by concatenating all span texts.
+/// This allows multi-word queries to match across span boundaries.
+pub fn line_matches_query(line: &RenderedLine, query_lower: &str) -> bool {
+    let full_text: String = line.spans.iter().map(|(text, _)| text.as_str()).collect();
+    full_text.to_lowercase().contains(query_lower)
 }
 
 impl TerminalGuard {
