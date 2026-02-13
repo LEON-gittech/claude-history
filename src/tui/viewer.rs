@@ -569,6 +569,7 @@ impl TuiMarkdownRenderer {
             TagEnd::CodeBlock => {
                 self.in_code_block = false;
                 let code_content = std::mem::take(&mut self.code_block_content);
+                let code_content = crate::markdown::wrap_code_lines(&code_content, self.max_width);
 
                 // Try syntax highlighting first
                 if let Some(highlighted_lines) =

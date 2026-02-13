@@ -243,8 +243,9 @@ impl MarkdownRenderer {
             TagEnd::CodeBlock => {
                 self.in_code_block = false;
 
-                // Output highlighted code
+                // Wrap long lines before highlighting so they fit within max_width
                 let code = std::mem::take(&mut self.code_block_content);
+                let code = wrap_code_lines(&code, self.max_width);
                 if let Some(highlighted) =
                     crate::syntax::highlight_code_ansi(&code, &self.code_block_lang)
                 {
@@ -429,6 +430,38 @@ fn apply_styles(text: &str, styles: &[TextStyle]) -> String {
     }
 
     result.to_string()
+}
+
+/// Hard-wrap code block lines that exceed max_width at character boundaries.
+/// Operates on plain text (before syntax highlighting) so no ANSI handling needed.
+pub fn wrap_code_lines(code: &str, max_width: usize) -> String {
+    use unicode_width::UnicodeWidthChar;
+
+    if max_width == 0 {
+        return code.to_string();
+    }
+
+    let mut result = String::new();
+    for line in code.lines() {
+        let line_width = line.width();
+        if line_width <= max_width {
+            result.push_str(line);
+            result.push('\n');
+        } else {
+            let mut current_width = 0;
+            for ch in line.chars() {
+                let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+                if current_width + ch_width > max_width && current_width > 0 {
+                    result.push('\n');
+                    current_width = 0;
+                }
+                result.push(ch);
+                current_width += ch_width;
+            }
+            result.push('\n');
+        }
+    }
+    result
 }
 
 /// Wrap text while preserving ANSI escape codes
@@ -652,6 +685,27 @@ Next paragraph here."#;
             "Expected blank line before list, got: {:?}",
             result
         );
+    }
+
+    #[test]
+    fn test_code_block_wrapping() {
+        // Use --no-color mode (colors disabled by default in tests)
+        let long_line = "x".repeat(100);
+        let input = format!("```\n{}\n```", long_line);
+        let result = render_markdown(&input, 40);
+        // Every output line should fit within max_width
+        for line in result.lines() {
+            let width = UnicodeWidthStr::width(line);
+            assert!(
+                width <= 40,
+                "Line exceeds max_width ({}): {:?}",
+                width,
+                line
+            );
+        }
+        // Content should still be present (just wrapped)
+        let total_x: usize = result.lines().map(|l| l.matches('x').count()).sum();
+        assert_eq!(total_x, 100, "All characters should be preserved");
     }
 
     #[test]
