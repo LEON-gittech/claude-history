@@ -1,20 +1,40 @@
-//! Markdown to ANSI text rendering
+//! Markdown rendering
 //!
-//! Converts markdown text to ANSI-styled strings suitable for terminal output.
-//! Handles text wrapping internally to preserve ledger alignment.
+//! Converts markdown text to styled strings with line wrapping.
+//! Supports two modes:
+//! - ANSI: colored terminal output with syntax highlighting
+//! - Plain: clean plain text for export/clipboard (no escape codes)
 
 use colored::{ColoredString, Colorize};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use unicode_width::UnicodeWidthStr;
 
+/// Render mode controls whether output includes ANSI escape codes
+#[derive(Clone, Copy, PartialEq)]
+enum RenderMode {
+    /// ANSI-styled output for terminal display
+    Ansi,
+    /// Plain text output for export/clipboard
+    Plain,
+}
+
 /// Render markdown text to ANSI-styled string with line wrapping
 pub fn render_markdown(input: &str, max_width: usize) -> String {
+    render_markdown_with_mode(input, max_width, RenderMode::Ansi)
+}
+
+/// Render markdown text to plain text (no ANSI codes) with line wrapping
+pub fn render_markdown_plain(input: &str, max_width: usize) -> String {
+    render_markdown_with_mode(input, max_width, RenderMode::Plain)
+}
+
+fn render_markdown_with_mode(input: &str, max_width: usize, mode: RenderMode) -> String {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
 
     let parser = Parser::new_ext(input, options);
-    let mut renderer = MarkdownRenderer::new(max_width);
+    let mut renderer = MarkdownRenderer::new(max_width, mode);
 
     for event in parser {
         renderer.handle_event(event);
@@ -26,6 +46,7 @@ pub fn render_markdown(input: &str, max_width: usize) -> String {
 struct MarkdownRenderer {
     output: String,
     max_width: usize,
+    mode: RenderMode,
     style_stack: Vec<TextStyle>,
     list_stack: Vec<ListContext>,
     in_code_block: bool,
@@ -69,10 +90,11 @@ enum TextStyle {
 }
 
 impl MarkdownRenderer {
-    fn new(max_width: usize) -> Self {
+    fn new(max_width: usize, mode: RenderMode) -> Self {
         Self {
             output: String::new(),
             max_width,
+            mode,
             style_stack: vec![],
             list_stack: vec![],
             in_code_block: false,
@@ -83,6 +105,10 @@ impl MarkdownRenderer {
             in_list_item_start: false,
             table_state: None,
         }
+    }
+
+    fn is_plain(&self) -> bool {
+        self.mode == RenderMode::Plain
     }
 
     fn handle_event(&mut self, event: Event) {
@@ -125,8 +151,12 @@ impl MarkdownRenderer {
                 }
                 let hashes = heading_level_to_usize(level);
                 let prefix = "#".repeat(hashes);
-                self.output
-                    .push_str(&format!("{} ", prefix).cyan().bold().to_string());
+                if self.is_plain() {
+                    self.output.push_str(&format!("{} ", prefix));
+                } else {
+                    self.output
+                        .push_str(&format!("{} ", prefix).cyan().bold().to_string());
+                }
             }
             Tag::CodeBlock(kind) => {
                 self.flush_pending();
@@ -144,11 +174,15 @@ impl MarkdownRenderer {
                     CodeBlockKind::Indented => String::new(),
                 };
                 self.code_block_lang = lang.clone();
-                if !lang.is_empty() {
-                    self.output
-                        .push_str(&format!("```{}", lang).dimmed().to_string());
+                let fence = if lang.is_empty() {
+                    "```".to_string()
                 } else {
-                    self.output.push_str(&"```".dimmed().to_string());
+                    format!("```{}", lang)
+                };
+                if self.is_plain() {
+                    self.output.push_str(&fence);
+                } else {
+                    self.output.push_str(&fence.dimmed().to_string());
                 }
                 self.output.push('\n');
             }
@@ -177,12 +211,17 @@ impl MarkdownRenderer {
                 } else {
                     String::new()
                 };
+                let plain = self.is_plain();
                 if let Some(ctx) = self.list_stack.last_mut() {
                     match &mut ctx.index {
                         None => self.output.push_str(&format!("{}- ", indent)),
                         Some(n) => {
-                            self.output
-                                .push_str(&format!("{}{}. ", indent, n).dimmed().to_string());
+                            let bullet = format!("{}{}. ", indent, n);
+                            if plain {
+                                self.output.push_str(&bullet);
+                            } else {
+                                self.output.push_str(&bullet.dimmed().to_string());
+                            }
                             *n += 1;
                         }
                     }
@@ -198,7 +237,11 @@ impl MarkdownRenderer {
                 if !self.output.is_empty() && !self.output.ends_with('\n') {
                     self.output.push('\n');
                 }
-                self.output.push_str(&"> ".green().to_string());
+                if self.is_plain() {
+                    self.output.push_str("> ");
+                } else {
+                    self.output.push_str(&"> ".green().to_string());
+                }
                 self.style_stack.push(TextStyle::Quote);
             }
             Tag::Link { dest_url, .. } => {
@@ -246,7 +289,11 @@ impl MarkdownRenderer {
                 // Wrap long lines before highlighting so they fit within max_width
                 let code = std::mem::take(&mut self.code_block_content);
                 let code = wrap_code_lines(&code, self.max_width);
-                if let Some(highlighted) =
+
+                if self.is_plain() {
+                    // Plain text: output code as-is (no syntax highlighting)
+                    self.output.push_str(&code);
+                } else if let Some(highlighted) =
                     crate::syntax::highlight_code_ansi(&code, &self.code_block_lang)
                 {
                     self.output.push_str(&highlighted);
@@ -262,7 +309,11 @@ impl MarkdownRenderer {
                 if !self.output.ends_with('\n') {
                     self.output.push('\n');
                 }
-                self.output.push_str(&"```".dimmed().to_string());
+                if self.is_plain() {
+                    self.output.push_str("```");
+                } else {
+                    self.output.push_str(&"```".dimmed().to_string());
+                }
                 self.output.push('\n');
                 self.at_line_start = true;
             }
@@ -283,13 +334,17 @@ impl MarkdownRenderer {
             }
             TagEnd::Link => {
                 if let Some(TextStyle::Link(url)) = self.style_stack.pop() {
-                    self.pending_text
-                        .push_str(&format!(" ({})", url).blue().underline().to_string());
+                    if self.is_plain() {
+                        self.pending_text.push_str(&format!(" ({})", url));
+                    } else {
+                        self.pending_text
+                            .push_str(&format!(" ({})", url).blue().underline().to_string());
+                    }
                 }
             }
             TagEnd::Table => {
                 if let Some(state) = self.table_state.take() {
-                    let rendered = render_table(&state.rows);
+                    let rendered = render_table(&state.rows, !self.is_plain());
                     self.output.push_str(&rendered);
                 }
                 self.at_line_start = true;
@@ -321,6 +376,9 @@ impl MarkdownRenderer {
         if self.in_code_block {
             // Buffer code block content for syntax highlighting at block end
             self.code_block_content.push_str(text);
+        } else if self.is_plain() {
+            // Plain mode: no ANSI styling
+            self.pending_text.push_str(text);
         } else {
             // Apply styles immediately (before they get popped from stack)
             let styled = apply_styles(text, &self.style_stack);
@@ -335,9 +393,16 @@ impl MarkdownRenderer {
             return;
         }
 
-        // Inline code with subtle blueish color (no backticks - color distinguishes it)
-        let styled = code.truecolor(147, 161, 199).to_string();
-        self.pending_text.push_str(&styled);
+        if self.is_plain() {
+            // Plain mode: wrap in backticks since there's no color to distinguish
+            self.pending_text.push('`');
+            self.pending_text.push_str(code);
+            self.pending_text.push('`');
+        } else {
+            // Inline code with subtle blueish color (no backticks - color distinguishes it)
+            let styled = code.truecolor(147, 161, 199).to_string();
+            self.pending_text.push_str(&styled);
+        }
     }
 
     fn soft_break(&mut self) {
@@ -358,8 +423,12 @@ impl MarkdownRenderer {
         if !self.output.is_empty() && !self.output.ends_with('\n') {
             self.output.push('\n');
         }
-        self.output
-            .push_str(&"─".repeat(self.max_width.min(40)).dimmed().to_string());
+        let rule = "─".repeat(self.max_width.min(40));
+        if self.is_plain() {
+            self.output.push_str(&rule);
+        } else {
+            self.output.push_str(&rule.dimmed().to_string());
+        }
         self.output.push('\n');
         self.at_line_start = true;
     }
@@ -480,7 +549,8 @@ fn wrap_text_preserve_ansi(text: &str, max_width: usize) -> Vec<String> {
 }
 
 /// Render a table with box-drawing characters
-fn render_table(rows: &[Vec<String>]) -> String {
+/// When `styled` is true, borders are dimmed with ANSI codes.
+fn render_table(rows: &[Vec<String>], styled: bool) -> String {
     if rows.is_empty() {
         return String::new();
     }
@@ -512,6 +582,9 @@ fn render_table(rows: &[Vec<String>]) -> String {
 
     let mut output = String::new();
 
+    // Optionally apply dimmed style to border text
+    let dim = |s: String| -> String { if styled { s.dimmed().to_string() } else { s } };
+
     // Helper to build horizontal line
     let build_line = |left: char, mid: char, right: char| -> String {
         let mut line = String::new();
@@ -528,12 +601,12 @@ fn render_table(rows: &[Vec<String>]) -> String {
     };
 
     // Top border (dimmed like code fences)
-    output.push_str(&build_line(tl, tj, tr).dimmed().to_string());
+    output.push_str(&dim(build_line(tl, tj, tr)));
 
     // Rows with separators
     for (row_idx, row) in rows.iter().enumerate() {
         // Row content
-        output.push_str(&v.to_string().dimmed().to_string());
+        output.push_str(&dim(v.to_string()));
         for (i, width) in col_widths.iter().enumerate() {
             let cell = row.get(i).map(|s| s.trim()).unwrap_or("");
             let cell_width = cell.width();
@@ -541,18 +614,18 @@ fn render_table(rows: &[Vec<String>]) -> String {
             output.push(' ');
             output.push_str(cell);
             output.push_str(&" ".repeat(padding + 1));
-            output.push_str(&v.to_string().dimmed().to_string());
+            output.push_str(&dim(v.to_string()));
         }
         output.push('\n');
 
         // Separator (between all rows)
         if row_idx < rows.len() - 1 {
-            output.push_str(&build_line(lj, cj, rj).dimmed().to_string());
+            output.push_str(&dim(build_line(lj, cj, rj)));
         }
     }
 
     // Bottom border (dimmed like code fences)
-    output.push_str(&build_line(bl, bj, br).dimmed().to_string());
+    output.push_str(&dim(build_line(bl, bj, br)));
 
     output
 }
@@ -748,5 +821,133 @@ Next paragraph here."#;
         // Should have separators between rows
         assert!(result.contains("├"), "Expected row separators");
         assert!(result.contains("┼"), "Expected cross junctions");
+    }
+
+    // Tests for render_markdown_plain
+
+    #[test]
+    fn test_plain_no_ansi_codes() {
+        let input = "This is **bold** and *italic* and `code`";
+        let result = render_markdown_plain(input, 80);
+        assert!(
+            !result.contains("\x1b"),
+            "Plain output should not contain ANSI escape codes: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_plain_inline_code_has_backticks() {
+        let result = render_markdown_plain("Use `foo()` here", 80);
+        assert!(
+            result.contains("`foo()`"),
+            "Plain inline code should have backticks: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_plain_code_block() {
+        let result = render_markdown_plain("```rust\nlet x = 1;\n```", 80);
+        assert!(result.contains("```rust"), "Should have opening fence");
+        assert!(result.contains("let x = 1;"), "Should have code content");
+        // Count closing fences (should have opening and closing)
+        assert_eq!(
+            result.matches("```").count(),
+            2,
+            "Should have exactly 2 fences (open + close)"
+        );
+    }
+
+    #[test]
+    fn test_plain_heading() {
+        let result = render_markdown_plain("## Heading", 80);
+        assert!(
+            result.contains("## Heading"),
+            "Should have heading with hash prefix: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_plain_list() {
+        let result = render_markdown_plain("- item 1\n- item 2", 80);
+        assert!(result.contains("- item 1"), "Should have list items");
+        assert!(result.contains("- item 2"), "Should have list items");
+    }
+
+    #[test]
+    fn test_plain_link() {
+        let result = render_markdown_plain("[click here](https://example.com)", 80);
+        assert!(
+            result.contains("click here"),
+            "Should have link text: {:?}",
+            result
+        );
+        assert!(
+            result.contains("(https://example.com)"),
+            "Should have link URL: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_plain_wrapping() {
+        let long_text = "word ".repeat(20); // 100 chars
+        let result = render_markdown_plain(&long_text, 40);
+        for line in result.lines() {
+            let width = UnicodeWidthStr::width(line);
+            assert!(
+                width <= 40,
+                "Line exceeds max_width ({}): {:?}",
+                width,
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn test_plain_table() {
+        let input = r#"| A | B |
+|---|---|
+| 1 | 2 |"#;
+        let result = render_markdown_plain(input, 80);
+        assert!(
+            !result.contains("\x1b"),
+            "Plain table should not contain ANSI: {:?}",
+            result
+        );
+        assert!(result.contains("┌"), "Should have box-drawing chars");
+        assert!(result.contains(" A "), "Should have cell content");
+    }
+
+    #[test]
+    fn test_plain_block_quote() {
+        let result = render_markdown_plain("> quoted text", 80);
+        assert!(
+            result.contains("> "),
+            "Should have block quote prefix: {:?}",
+            result
+        );
+        assert!(
+            !result.contains("\x1b"),
+            "Plain block quote should not contain ANSI: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_plain_horizontal_rule() {
+        let result = render_markdown_plain("---", 80);
+        assert!(
+            result.contains("─"),
+            "Should have horizontal rule: {:?}",
+            result
+        );
+        assert!(
+            !result.contains("\x1b"),
+            "Plain rule should not contain ANSI: {:?}",
+            result
+        );
     }
 }
