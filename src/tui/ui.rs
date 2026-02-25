@@ -1503,6 +1503,7 @@ fn build_context_segments(
 
     let mut result = String::new();
     let mut remaining_width = max_width;
+    let mut prev_end_byte: usize = 0;
 
     for (i, &(match_start, match_end)) in hidden_matches.iter().enumerate() {
         let match_char_len = full_text[match_start..match_end].chars().count();
@@ -1512,27 +1513,34 @@ fn build_context_segments(
             / 2;
 
         // Find char boundaries for the context window in raw full_text
-        let start_byte = full_text[..match_start]
+        let mut start_byte = full_text[..match_start]
             .char_indices()
             .rev()
             .nth(context_chars)
             .map(|(idx, _)| idx)
             .unwrap_or(0);
 
+        // Prevent overlapping with previous segment
+        start_byte = start_byte.max(prev_end_byte);
+
         let end_byte = full_text[match_end..]
             .char_indices()
             .nth(context_chars)
             .map(|(idx, _)| match_end + idx)
-            .unwrap_or(full_text.len());
+            .unwrap_or(full_text.len())
+            .min(full_text.len());
 
-        let snippet = &full_text[start_byte..end_byte.min(full_text.len())];
+        let snippet = &full_text[start_byte..end_byte];
         let sanitized = sanitize_preview(snippet);
 
-        // Add leading ellipsis
-        if (i == 0 && start_byte > 0) || i > 0 {
+        // Add ellipsis if there's a gap before this segment
+        let has_gap = if i == 0 { start_byte > 0 } else { start_byte > prev_end_byte };
+        if has_gap {
             result.push('…');
             remaining_width = remaining_width.saturating_sub(1);
         }
+
+        prev_end_byte = end_byte;
 
         // Append segment, truncating if needed
         let seg_char_count = sanitized.chars().count();
