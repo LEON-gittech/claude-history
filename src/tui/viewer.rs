@@ -437,6 +437,9 @@ impl TuiMarkdownRenderer {
             Event::SoftBreak => self.soft_break(),
             Event::HardBreak => self.hard_break(),
             Event::Rule => self.rule(),
+            // Render HTML blocks/inline as plain text so that XML-like tags
+            // (e.g. <analysis>, <system-reminder>) are not silently dropped.
+            Event::Html(html) | Event::InlineHtml(html) => self.text(&html),
             _ => {}
         }
     }
