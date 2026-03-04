@@ -4,7 +4,7 @@
 //! in the TUI viewer. It produces styled spans that ratatui can render directly,
 //! without using ANSI escape codes.
 
-use crate::claude::{AssistantMessage, ContentBlock, LogEntry, UserContent};
+use crate::claude::{self, AssistantMessage, ContentBlock, LogEntry, UserContent};
 use crate::tool_format;
 use crate::tui::app::{LineStyle, RenderedLine};
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
@@ -186,7 +186,7 @@ fn render_user_message(
 ) {
     let mut printed = false;
     let mut ts_remaining = timestamp;
-    let is_nested = parent_id.is_some();
+    let nested_label = parent_id.map(subagent_label);
 
     // Extract text from user message, collecting all text blocks
     let text = match &message.content {
@@ -212,9 +212,8 @@ fn render_user_message(
 
     if let Some(text) = text {
         let md_lines = render_markdown_to_lines(&text, options.content_width);
-        if is_nested {
-            let label = subagent_label(parent_id.unwrap());
-            render_ledger_block_styled_dimmed(lines, &label, WHITE, md_lines, options.show_timing);
+        if let Some(ref label) = nested_label {
+            render_ledger_block_styled_dimmed(lines, label, WHITE, md_lines, options.show_timing);
         } else {
             render_ledger_block_styled(lines, "You", WHITE, true, md_lines, ts_remaining);
         }
@@ -228,7 +227,7 @@ fn render_user_message(
     {
         for block in blocks {
             if let ContentBlock::ToolResult { content, .. } = block {
-                if is_nested {
+                if nested_label.is_some() {
                     // Dimmed tool result for subagent
                     let content_str = format_tool_result_content(content.as_ref());
                     render_ledger_block_plain_dimmed(
@@ -334,7 +333,7 @@ fn render_assistant_message(
 ) {
     let mut printed = false;
     let mut ts_remaining = timestamp;
-    let is_nested = parent_id.is_some();
+    let nested_label = parent_id.map(subagent_label);
 
     // Text blocks
     for block in &message.content {
@@ -343,11 +342,10 @@ fn render_assistant_message(
                 continue;
             }
             let md_lines = render_markdown_to_lines(text, options.content_width);
-            if is_nested {
-                let label = subagent_label(parent_id.unwrap());
+            if let Some(ref label) = nested_label {
                 render_ledger_block_styled_dimmed(
                     lines,
-                    &label,
+                    label,
                     TEAL,
                     md_lines,
                     options.show_timing,
@@ -367,8 +365,7 @@ fn render_assistant_message(
     if options.tool_display.is_visible() {
         for block in &message.content {
             if let ContentBlock::ToolUse { name, input, .. } = block {
-                if is_nested {
-                    let label = subagent_label(parent_id.unwrap());
+                if let Some(ref label) = nested_label {
                     let align_ts = if options.show_timing {
                         Some("     ")
                     } else {
@@ -378,7 +375,7 @@ fn render_assistant_message(
                         lines,
                         name,
                         input,
-                        &label,
+                        label,
                         DIM_TEAL,
                         true,
                         options.content_width,
@@ -414,7 +411,7 @@ fn render_assistant_message(
     }
 
     // Thinking blocks (if enabled, skip for subagents)
-    if options.show_thinking && !is_nested {
+    if options.show_thinking && nested_label.is_none() {
         for block in &message.content {
             if let ContentBlock::Thinking { thinking, .. } = block {
                 let md_lines = render_markdown_to_lines(thinking, options.content_width);
@@ -1341,13 +1338,8 @@ fn short_agent_id(agent_id: &str) -> &str {
 }
 
 /// Create a label for subagent entries from a parent_tool_use_id.
-/// Strips the "toolu_" prefix and uses the first 7 characters.
 fn subagent_label(parent_tool_use_id: &str) -> String {
-    let stripped = parent_tool_use_id
-        .strip_prefix("toolu_")
-        .unwrap_or(parent_tool_use_id);
-    let short = &stripped[..stripped.len().min(7)];
-    format!("↳{}", short)
+    format!("↳{}", claude::short_parent_id(parent_tool_use_id))
 }
 
 /// Render agent (subagent) progress message

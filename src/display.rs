@@ -368,12 +368,8 @@ fn format_tool_content(content: Option<&serde_json::Value>) -> String {
 }
 
 /// Create a display ID for subagent entries from a parent_tool_use_id.
-/// Strips the "toolu_" prefix and uses the first 7 characters.
 fn subagent_display_id(parent_tool_use_id: &str) -> String {
-    let stripped = parent_tool_use_id
-        .strip_prefix("toolu_")
-        .unwrap_or(parent_tool_use_id);
-    stripped[..stripped.len().min(7)].to_string()
+    crate::claude::short_parent_id(parent_tool_use_id)
 }
 
 /// Process user message text to handle command-related XML tags

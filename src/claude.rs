@@ -196,6 +196,15 @@ pub enum AgentContent {
     Blocks(Vec<ContentBlock>),
 }
 
+/// Format a parent_tool_use_id into a short display ID.
+/// Strips the "toolu_" prefix and takes the first 7 characters.
+pub fn short_parent_id(parent_tool_use_id: &str) -> String {
+    let stripped = parent_tool_use_id
+        .strip_prefix("toolu_")
+        .unwrap_or(parent_tool_use_id);
+    stripped[..stripped.len().min(7)].to_string()
+}
+
 /// Attempt to parse agent progress data from a Progress entry
 pub fn parse_agent_progress(data: &serde_json::Value) -> Option<AgentProgressData> {
     // Check if this is an agent_progress type

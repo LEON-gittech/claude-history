@@ -9,7 +9,7 @@
 //! Conversations can be exported to files or copied to the clipboard.
 //! Export respects the current display settings for thinking blocks and tool calls.
 
-use crate::claude::{ContentBlock, LogEntry, UserContent, UserMessage};
+use crate::claude::{self, ContentBlock, LogEntry, UserContent, UserMessage};
 use crate::tool_format;
 use arboard::Clipboard;
 use chrono::Local;
@@ -154,8 +154,9 @@ fn generate_plain(path: &Path, options: ExportOptions) -> std::io::Result<String
                     if parent_tool_use_id.is_some() && !options.show_thinking {
                         continue;
                     }
+                    let prefix = subagent_prefix(&parent_tool_use_id);
                     if let Some(text) = extract_user_text(&message) {
-                        output.push_str(&format!("You: {}\n\n", text));
+                        output.push_str(&format!("{}You: {}\n\n", prefix, text));
                     }
                     // Tool results
                     if options.show_tools
@@ -164,7 +165,10 @@ fn generate_plain(path: &Path, options: ExportOptions) -> std::io::Result<String
                         for block in blocks {
                             if let ContentBlock::ToolResult { content, .. } = block {
                                 let content_str = format_tool_result_for_export(content.as_ref());
-                                output.push_str(&format!("Tool Result: {}\n\n", content_str));
+                                output.push_str(&format!(
+                                    "{}Tool Result: {}\n\n",
+                                    prefix, content_str
+                                ));
                             }
                         }
                     }
@@ -177,17 +181,18 @@ fn generate_plain(path: &Path, options: ExportOptions) -> std::io::Result<String
                     if parent_tool_use_id.is_some() && !options.show_thinking {
                         continue;
                     }
+                    let prefix = subagent_prefix(&parent_tool_use_id);
                     for block in &message.content {
                         match block {
                             ContentBlock::Text { text } => {
-                                output.push_str(&format!("Claude: {}\n\n", text));
+                                output.push_str(&format!("{}Claude: {}\n\n", prefix, text));
                             }
                             ContentBlock::ToolUse { name, input, .. } if options.show_tools => {
                                 let formatted = format_tool_call_for_export(name, input);
-                                output.push_str(&format!("Tool: {}\n\n", formatted));
+                                output.push_str(&format!("{}Tool: {}\n\n", prefix, formatted));
                             }
                             ContentBlock::Thinking { thinking, .. } if options.show_thinking => {
-                                output.push_str(&format!("Thinking: {}\n\n", thinking));
+                                output.push_str(&format!("{}Thinking: {}\n\n", prefix, thinking));
                             }
                             _ => {}
                         }
@@ -222,8 +227,9 @@ fn generate_markdown(path: &Path, options: ExportOptions) -> std::io::Result<Str
                     if parent_tool_use_id.is_some() && !options.show_thinking {
                         continue;
                     }
+                    let prefix = subagent_prefix(&parent_tool_use_id);
                     if let Some(text) = extract_user_text(&message) {
-                        output.push_str(&format!("## You\n\n{}\n\n", text));
+                        output.push_str(&format!("## {}You\n\n{}\n\n", prefix, text));
                     }
                     // Tool results
                     if options.show_tools
@@ -233,7 +239,10 @@ fn generate_markdown(path: &Path, options: ExportOptions) -> std::io::Result<Str
                             if let ContentBlock::ToolResult { content, .. } = block {
                                 let content_str = format_tool_result_for_export(content.as_ref());
                                 let fenced = markdown_code_fence(&content_str);
-                                output.push_str(&format!("### Tool Result\n\n{}\n\n", fenced));
+                                output.push_str(&format!(
+                                    "### {}Tool Result\n\n{}\n\n",
+                                    prefix, fenced
+                                ));
                             }
                         }
                     }
@@ -246,18 +255,25 @@ fn generate_markdown(path: &Path, options: ExportOptions) -> std::io::Result<Str
                     if parent_tool_use_id.is_some() && !options.show_thinking {
                         continue;
                     }
+                    let prefix = subagent_prefix(&parent_tool_use_id);
                     for block in &message.content {
                         match block {
                             ContentBlock::Text { text } => {
-                                output.push_str(&format!("## Claude\n\n{}\n\n", text));
+                                output.push_str(&format!("## {}Claude\n\n{}\n\n", prefix, text));
                             }
                             ContentBlock::ToolUse { name, input, .. } if options.show_tools => {
                                 let formatted = format_tool_call_for_export(name, input);
                                 let fenced = markdown_code_fence(&formatted);
-                                output.push_str(&format!("### Tool: {}\n\n{}\n\n", name, fenced));
+                                output.push_str(&format!(
+                                    "### {}Tool: {}\n\n{}\n\n",
+                                    prefix, name, fenced
+                                ));
                             }
                             ContentBlock::Thinking { thinking, .. } if options.show_thinking => {
-                                output.push_str(&format!("### Thinking\n\n{}\n\n", thinking));
+                                output.push_str(&format!(
+                                    "### {}Thinking\n\n{}\n\n",
+                                    prefix, thinking
+                                ));
                             }
                             _ => {}
                         }
@@ -299,9 +315,13 @@ fn generate_ledger(path: &Path, options: ExportOptions) -> std::io::Result<Strin
                     if parent_tool_use_id.is_some() && !options.show_thinking {
                         continue;
                     }
+                    let speaker = match &parent_tool_use_id {
+                        Some(id) => format!("↳{}", claude::short_parent_id(id)),
+                        None => "You".to_string(),
+                    };
                     if let Some(text) = extract_user_text(&message) {
                         let wrapped = wrap_plain_text(&text, content_width);
-                        append_ledger_block(&mut output, "You", &wrapped, NAME_WIDTH);
+                        append_ledger_block(&mut output, &speaker, &wrapped, NAME_WIDTH);
                         output.push('\n');
                     }
                     // Tool results
@@ -329,19 +349,33 @@ fn generate_ledger(path: &Path, options: ExportOptions) -> std::io::Result<Strin
                     if parent_tool_use_id.is_some() && !options.show_thinking {
                         continue;
                     }
+                    let speaker = match &parent_tool_use_id {
+                        Some(id) => format!("↳{}", claude::short_parent_id(id)),
+                        None => "Claude".to_string(),
+                    };
                     for block in &message.content {
                         match block {
                             ContentBlock::Text { text } => {
                                 let rendered =
                                     crate::markdown::render_markdown_plain(text, content_width);
                                 let rendered = rendered.trim_end();
-                                append_ledger_block(&mut output, "Claude", rendered, NAME_WIDTH);
+                                append_ledger_block(&mut output, &speaker, rendered, NAME_WIDTH);
                                 output.push('\n');
                             }
                             ContentBlock::ToolUse { name, input, .. } if options.show_tools => {
                                 let formatted =
                                     format_tool_call_for_ledger(name, input, content_width);
-                                append_ledger_block(&mut output, "Tool", &formatted, NAME_WIDTH);
+                                let tool_label = if parent_tool_use_id.is_some() {
+                                    &speaker
+                                } else {
+                                    "Tool"
+                                };
+                                append_ledger_block(
+                                    &mut output,
+                                    tool_label,
+                                    &formatted,
+                                    NAME_WIDTH,
+                                );
                                 output.push('\n');
                             }
                             ContentBlock::Thinking { thinking, .. } if options.show_thinking => {
@@ -376,6 +410,15 @@ fn append_ledger_block(output: &mut String, speaker: &str, text: &str, name_widt
         } else {
             output.push_str(&format!("{:>width$} │ {}\n", "", line, width = name_width));
         }
+    }
+}
+
+/// Generate a prefix string for subagent entries in exports.
+/// Returns "[↳ID] " for nested entries, empty string for top-level.
+fn subagent_prefix(parent_tool_use_id: &Option<String>) -> String {
+    match parent_tool_use_id {
+        Some(id) => format!("[↳{}] ", claude::short_parent_id(id)),
+        None => String::new(),
     }
 }
 
