@@ -129,24 +129,50 @@ fn render_entry(lines: &mut Vec<RenderedLine>, entry: &LogEntry, options: &Rende
             }
         }
         LogEntry::User {
-            message, timestamp, ..
+            message,
+            timestamp,
+            parent_tool_use_id,
+            ..
         } => {
+            // Subagent messages: show nested when show_thinking, skip otherwise
+            if parent_tool_use_id.is_some() && !options.show_thinking {
+                return;
+            }
             let ts = if options.show_timing {
                 timestamp.as_deref().and_then(format_timestamp)
             } else {
                 None
             };
-            render_user_message(lines, message, options, ts.as_deref());
+            render_user_message(
+                lines,
+                message,
+                options,
+                ts.as_deref(),
+                parent_tool_use_id.as_deref(),
+            );
         }
         LogEntry::Assistant {
-            message, timestamp, ..
+            message,
+            timestamp,
+            parent_tool_use_id,
+            ..
         } => {
+            // Subagent messages: show nested when show_thinking, skip otherwise
+            if parent_tool_use_id.is_some() && !options.show_thinking {
+                return;
+            }
             let ts = if options.show_timing {
                 timestamp.as_deref().and_then(format_timestamp)
             } else {
                 None
             };
-            render_assistant_message(lines, message, options, ts.as_deref());
+            render_assistant_message(
+                lines,
+                message,
+                options,
+                ts.as_deref(),
+                parent_tool_use_id.as_deref(),
+            );
         }
     }
 }
@@ -156,9 +182,11 @@ fn render_user_message(
     message: &crate::claude::UserMessage,
     options: &RenderOptions,
     timestamp: Option<&str>,
+    parent_id: Option<&str>,
 ) {
     let mut printed = false;
     let mut ts_remaining = timestamp;
+    let is_nested = parent_id.is_some();
 
     // Extract text from user message, collecting all text blocks
     let text = match &message.content {
@@ -184,7 +212,12 @@ fn render_user_message(
 
     if let Some(text) = text {
         let md_lines = render_markdown_to_lines(&text, options.content_width);
-        render_ledger_block_styled(lines, "You", WHITE, true, md_lines, ts_remaining);
+        if is_nested {
+            let label = subagent_label(parent_id.unwrap());
+            render_ledger_block_styled_dimmed(lines, &label, WHITE, md_lines, options.show_timing);
+        } else {
+            render_ledger_block_styled(lines, "You", WHITE, true, md_lines, ts_remaining);
+        }
         printed = true;
         ts_remaining = None;
     }
@@ -195,27 +228,57 @@ fn render_user_message(
     {
         for block in blocks {
             if let ContentBlock::ToolResult { content, .. } = block {
-                let content_str = match extract_tool_result_text(content.as_ref()) {
-                    Some(text) => text,
-                    None => format_tool_result_content(content.as_ref()),
-                };
-                // Pass timestamp to first tool result if no text block consumed it
-                let ts = if ts_remaining.is_some() {
-                    let t = ts_remaining;
-                    ts_remaining = None;
-                    t
-                } else if options.show_timing {
-                    Some("     ")
+                if is_nested {
+                    // Dimmed tool result for subagent
+                    let content_str = format_tool_result_content(content.as_ref());
+                    render_ledger_block_plain_dimmed(
+                        lines,
+                        "  ↳ Tool",
+                        DIM_TEAL,
+                        "<Result>",
+                        options.show_timing,
+                    );
+                    if options.tool_display == ToolDisplayMode::Truncated {
+                        let content_lines: Vec<&str> = content_str.lines().collect();
+                        let total = content_lines.len();
+                        if total > TRUNCATED_RESULT_LINES {
+                            let truncated = content_lines[..TRUNCATED_RESULT_LINES].join("\n");
+                            render_continuation_dimmed(lines, &truncated, options.show_timing);
+                            render_truncation_indicator(
+                                lines,
+                                total - TRUNCATED_RESULT_LINES,
+                                true,
+                                options.show_timing,
+                            );
+                        } else {
+                            render_continuation_dimmed(lines, &content_str, options.show_timing);
+                        }
+                    } else {
+                        render_continuation_dimmed(lines, &content_str, options.show_timing);
+                    }
                 } else {
-                    None
-                };
-                render_tool_result(
-                    lines,
-                    &content_str,
-                    options.content_width,
-                    ts,
-                    options.tool_display,
-                );
+                    let content_str = match extract_tool_result_text(content.as_ref()) {
+                        Some(text) => text,
+                        None => format_tool_result_content(content.as_ref()),
+                    };
+                    // Pass timestamp to first tool result if no text block consumed it
+                    let ts = if ts_remaining.is_some() {
+                        let t = ts_remaining;
+                        ts_remaining = None;
+                        t
+                    } else if options.show_timing {
+                        Some("     ")
+                    } else {
+                        None
+                    };
+                    render_tool_result(
+                        lines,
+                        &content_str,
+                        options.content_width,
+                        ts,
+                        options.tool_display,
+                    );
+                }
                 printed = true;
             }
         }
@@ -267,9 +330,11 @@ fn render_assistant_message(
     message: &AssistantMessage,
     options: &RenderOptions,
     timestamp: Option<&str>,
+    parent_id: Option<&str>,
 ) {
     let mut printed = false;
     let mut ts_remaining = timestamp;
+    let is_nested = parent_id.is_some();
 
     // Text blocks
     for block in &message.content {
@@ -278,7 +343,18 @@ fn render_assistant_message(
                 continue;
             }
             let md_lines = render_markdown_to_lines(text, options.content_width);
-            render_ledger_block_styled(lines, "Claude", TEAL, true, md_lines, ts_remaining);
+            if is_nested {
+                let label = subagent_label(parent_id.unwrap());
+                render_ledger_block_styled_dimmed(
+                    lines,
+                    &label,
+                    TEAL,
+                    md_lines,
+                    options.show_timing,
+                );
+            } else {
+                render_ledger_block_styled(lines, "Claude", TEAL, true, md_lines, ts_remaining);
+            }
             printed = true;
             // After first block consumes the timestamp, use blank padding for alignment
             if ts_remaining.is_some() {
@@ -291,34 +367,54 @@ fn render_assistant_message(
     if options.tool_display.is_visible() {
         for block in &message.content {
             if let ContentBlock::ToolUse { name, input, .. } = block {
-                // Pass timestamp to first tool call if no text block consumed it
-                let ts = if ts_remaining.is_some() {
-                    let t = ts_remaining;
-                    ts_remaining = None;
-                    t
-                } else if options.show_timing {
-                    Some("     ")
+                if is_nested {
+                    let label = subagent_label(parent_id.unwrap());
+                    let align_ts = if options.show_timing {
+                        Some("     ")
+                    } else {
+                        None
+                    };
+                    render_tool_call(
+                        lines,
+                        name,
+                        input,
+                        &label,
+                        DIM_TEAL,
+                        true,
+                        options.content_width,
+                        align_ts,
+                        options.tool_display,
+                    );
                 } else {
-                    None
-                };
-                render_tool_call(
-                    lines,
-                    name,
-                    input,
-                    "Claude",
-                    DIM_TEAL,
-                    false,
-                    options.content_width,
-                    ts,
-                    options.tool_display,
-                );
+                    // Pass timestamp to first tool call if no text block consumed it
+                    let ts = if ts_remaining.is_some() {
+                        let t = ts_remaining;
+                        ts_remaining = None;
+                        t
+                    } else if options.show_timing {
+                        Some("     ")
+                    } else {
+                        None
+                    };
+                    render_tool_call(
+                        lines,
+                        name,
+                        input,
+                        "Claude",
+                        DIM_TEAL,
+                        false,
+                        options.content_width,
+                        ts,
+                        options.tool_display,
+                    );
+                }
                 printed = true;
             }
         }
     }
 
-    // Thinking blocks (if enabled)
-    if options.show_thinking {
+    // Thinking blocks (if enabled, skip for subagents)
+    if options.show_thinking && !is_nested {
         for block in &message.content {
             if let ContentBlock::Thinking { thinking, .. } = block {
                 let md_lines = render_markdown_to_lines(thinking, options.content_width);
@@ -1242,6 +1338,16 @@ fn render_tool_result(
 /// Get a truncated agent ID for display (max 7 characters)
 fn short_agent_id(agent_id: &str) -> &str {
     &agent_id[..agent_id.len().min(7)]
+}
+
+/// Create a label for subagent entries from a parent_tool_use_id.
+/// Strips the "toolu_" prefix and uses the first 7 characters.
+fn subagent_label(parent_tool_use_id: &str) -> String {
+    let stripped = parent_tool_use_id
+        .strip_prefix("toolu_")
+        .unwrap_or(parent_tool_use_id);
+    let short = &stripped[..stripped.len().min(7)];
+    format!("↳{}", short)
 }
 
 /// Render agent (subagent) progress message

@@ -178,12 +178,14 @@ header plus the first few body lines with a "(N more lines...)" indicator. Press
 `t` to cycle through modes: off → truncated → full. Use `--show-tools` (or `-t`)
 to start in full mode, or `--no-tools` to start with tools hidden.
 
-### Showing thinking blocks
+### Showing thinking blocks and subagent messages
 
 Extended thinking models (like Claude Sonnet 4.5) include reasoning steps in
-their output. By default, these thinking blocks are hidden to keep conversations
-focused. Use `--show-thinking` to display them when you want to see Claude's
-reasoning process.
+their output. When Claude uses the Task tool to spawn subagents, the internal
+tool calls and messages within those subagents are also hidden by default.
+Use `--show-thinking` (or press `T` in the TUI) to display both thinking blocks
+and subagent internals. Subagent messages appear dimmed with a `↳` prefix to
+distinguish them from top-level conversation entries.
 
 ### Resuming conversations
 
@@ -360,7 +362,8 @@ EOF
   false)
 - `relative_time` (boolean): Display relative time instead of absolute timestamp
   (default: false)
-- `show_thinking` (boolean): Show thinking blocks in conversation output
+- `show_thinking` (boolean): Show thinking blocks and subagent internals in
+  conversation output
   (default: false)
 - `plain` (boolean): Output plain text without ledger formatting (default:
   false)

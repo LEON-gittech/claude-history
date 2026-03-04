@@ -76,11 +76,11 @@ pub struct Args {
     #[arg(long, group = "time_display")]
     pub absolute_time: bool,
 
-    /// Show thinking blocks in the conversation output
+    /// Show thinking blocks and subagent internals in the conversation output
     #[arg(long, group = "thinking_display")]
     pub show_thinking: bool,
 
-    /// Hide thinking blocks from the conversation output
+    /// Hide thinking blocks and subagent internals from the conversation output
     #[arg(long, group = "thinking_display")]
     pub hide_thinking: bool,
 

@@ -146,7 +146,14 @@ fn generate_plain(path: &Path, options: ExportOptions) -> std::io::Result<String
         }
         if let Ok(entry) = serde_json::from_str::<LogEntry>(&line) {
             match entry {
-                LogEntry::User { message, .. } => {
+                LogEntry::User {
+                    message,
+                    parent_tool_use_id,
+                    ..
+                } => {
+                    if parent_tool_use_id.is_some() && !options.show_thinking {
+                        continue;
+                    }
                     if let Some(text) = extract_user_text(&message) {
                         output.push_str(&format!("You: {}\n\n", text));
                     }
@@ -162,7 +169,14 @@ fn generate_plain(path: &Path, options: ExportOptions) -> std::io::Result<String
                         }
                     }
                 }
-                LogEntry::Assistant { message, .. } => {
+                LogEntry::Assistant {
+                    message,
+                    parent_tool_use_id,
+                    ..
+                } => {
+                    if parent_tool_use_id.is_some() && !options.show_thinking {
+                        continue;
+                    }
                     for block in &message.content {
                         match block {
                             ContentBlock::Text { text } => {
@@ -200,7 +214,14 @@ fn generate_markdown(path: &Path, options: ExportOptions) -> std::io::Result<Str
         }
         if let Ok(entry) = serde_json::from_str::<LogEntry>(&line) {
             match entry {
-                LogEntry::User { message, .. } => {
+                LogEntry::User {
+                    message,
+                    parent_tool_use_id,
+                    ..
+                } => {
+                    if parent_tool_use_id.is_some() && !options.show_thinking {
+                        continue;
+                    }
                     if let Some(text) = extract_user_text(&message) {
                         output.push_str(&format!("## You\n\n{}\n\n", text));
                     }
@@ -217,7 +238,14 @@ fn generate_markdown(path: &Path, options: ExportOptions) -> std::io::Result<Str
                         }
                     }
                 }
-                LogEntry::Assistant { message, .. } => {
+                LogEntry::Assistant {
+                    message,
+                    parent_tool_use_id,
+                    ..
+                } => {
+                    if parent_tool_use_id.is_some() && !options.show_thinking {
+                        continue;
+                    }
                     for block in &message.content {
                         match block {
                             ContentBlock::Text { text } => {
@@ -263,7 +291,14 @@ fn generate_ledger(path: &Path, options: ExportOptions) -> std::io::Result<Strin
         }
         if let Ok(entry) = serde_json::from_str::<LogEntry>(&line) {
             match entry {
-                LogEntry::User { message, .. } => {
+                LogEntry::User {
+                    message,
+                    parent_tool_use_id,
+                    ..
+                } => {
+                    if parent_tool_use_id.is_some() && !options.show_thinking {
+                        continue;
+                    }
                     if let Some(text) = extract_user_text(&message) {
                         let wrapped = wrap_plain_text(&text, content_width);
                         append_ledger_block(&mut output, "You", &wrapped, NAME_WIDTH);
@@ -286,7 +321,14 @@ fn generate_ledger(path: &Path, options: ExportOptions) -> std::io::Result<Strin
                         }
                     }
                 }
-                LogEntry::Assistant { message, .. } => {
+                LogEntry::Assistant {
+                    message,
+                    parent_tool_use_id,
+                    ..
+                } => {
+                    if parent_tool_use_id.is_some() && !options.show_thinking {
+                        continue;
+                    }
                     for block in &message.content {
                         match block {
                             ContentBlock::Text { text } => {

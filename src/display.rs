@@ -367,6 +367,15 @@ fn format_tool_content(content: Option<&serde_json::Value>) -> String {
     }
 }
 
+/// Create a display ID for subagent entries from a parent_tool_use_id.
+/// Strips the "toolu_" prefix and uses the first 7 characters.
+fn subagent_display_id(parent_tool_use_id: &str) -> String {
+    let stripped = parent_tool_use_id
+        .strip_prefix("toolu_")
+        .unwrap_or(parent_tool_use_id);
+    stripped[..stripped.len().min(7)].to_string()
+}
+
 /// Process user message text to handle command-related XML tags
 /// Returns None if the message should be skipped entirely (e.g., empty local-command-stdout)
 fn process_command_message(text: &str) -> Option<String> {
@@ -568,11 +577,31 @@ fn process_entry<F: OutputFormatter>(
                 process_agent_message(formatter, &agent_progress, no_tools);
             }
         }
-        LogEntry::User { message, .. } => {
-            process_user_message(formatter, message, no_tools);
+        LogEntry::User {
+            message,
+            parent_tool_use_id,
+            ..
+        } => {
+            if parent_tool_use_id.is_some() && !show_thinking {
+                return;
+            }
+            process_user_message(formatter, message, no_tools, parent_tool_use_id.as_deref());
         }
-        LogEntry::Assistant { message, .. } => {
-            process_assistant_message(formatter, message, no_tools, show_thinking);
+        LogEntry::Assistant {
+            message,
+            parent_tool_use_id,
+            ..
+        } => {
+            if parent_tool_use_id.is_some() && !show_thinking {
+                return;
+            }
+            process_assistant_message(
+                formatter,
+                message,
+                no_tools,
+                show_thinking,
+                parent_tool_use_id.as_deref(),
+            );
         }
     }
 }
@@ -582,11 +611,18 @@ fn process_user_message<F: OutputFormatter>(
     formatter: &mut F,
     message: &crate::claude::UserMessage,
     no_tools: bool,
+    parent_id: Option<&str>,
 ) {
+    let agent_id = parent_id.map(subagent_display_id);
+
     match &message.content {
         UserContent::String(text) => {
             if let Some(processed) = process_command_message(text) {
-                formatter.format_user_text(&processed);
+                if let Some(ref id) = agent_id {
+                    formatter.format_agent_user_text(id, &processed);
+                } else {
+                    formatter.format_user_text(&processed);
+                }
                 formatter.end_message();
             }
         }
@@ -596,13 +632,21 @@ fn process_user_message<F: OutputFormatter>(
                 match block {
                     ContentBlock::Text { text } => {
                         if let Some(processed) = process_command_message(text) {
-                            formatter.format_user_text(&processed);
+                            if let Some(ref id) = agent_id {
+                                formatter.format_agent_user_text(id, &processed);
+                            } else {
+                                formatter.format_user_text(&processed);
+                            }
                             printed_content = true;
                         }
                     }
                     ContentBlock::ToolResult { content, .. } => {
                         if !no_tools {
-                            formatter.format_tool_result(content.as_ref());
+                            if let Some(ref id) = agent_id {
+                                formatter.format_agent_tool_result(id, content.as_ref());
+                            } else {
+                                formatter.format_tool_result(content.as_ref());
+                            }
                             printed_content = true;
                         }
                     }
@@ -654,29 +698,39 @@ fn process_assistant_message<F: OutputFormatter>(
     message: &AssistantMessage,
     no_tools: bool,
     show_thinking: bool,
+    parent_id: Option<&str>,
 ) {
     let formatted = FormattedMessage::from(message);
     let mut printed_content = false;
+    let agent_id = parent_id.map(subagent_display_id);
 
     // Print text blocks
     for text in formatted.text_blocks {
         if text.trim().is_empty() {
             continue;
         }
-        formatter.format_assistant_text(text);
+        if let Some(ref id) = agent_id {
+            formatter.format_agent_assistant_text(id, text);
+        } else {
+            formatter.format_assistant_text(text);
+        }
         printed_content = true;
     }
 
     // Print tool calls
     if !no_tools {
         for (tool_name, tool_input) in formatted.tool_calls {
-            formatter.format_tool_call(tool_name, tool_input);
+            if let Some(ref id) = agent_id {
+                formatter.format_agent_tool_call(id, tool_name, tool_input);
+            } else {
+                formatter.format_tool_call(tool_name, tool_input);
+            }
             printed_content = true;
         }
     }
 
-    // Print thinking blocks
-    if show_thinking {
+    // Print thinking blocks (skip for subagents)
+    if show_thinking && agent_id.is_none() {
         for thought in formatted.thinking_steps {
             formatter.format_thinking(thought);
             printed_content = true;

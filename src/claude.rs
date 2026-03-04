@@ -17,6 +17,10 @@ pub enum LogEntry {
         uuid: Option<String>,
         /// The working directory when this message was sent
         cwd: Option<String>,
+        /// When set, this message is part of a subagent conversation
+        /// spawned by the Task tool call with this ID
+        #[serde(default, rename = "parent_tool_use_id")]
+        parent_tool_use_id: Option<String>,
     },
     Assistant {
         message: AssistantMessage,
@@ -26,6 +30,10 @@ pub enum LogEntry {
         /// UUID for linking with turn_duration entries
         #[allow(dead_code)]
         uuid: Option<String>,
+        /// When set, this message is part of a subagent conversation
+        /// spawned by the Task tool call with this ID
+        #[serde(default, rename = "parent_tool_use_id")]
+        parent_tool_use_id: Option<String>,
     },
     #[serde(rename = "file-history-snapshot")]
     #[allow(dead_code)]
