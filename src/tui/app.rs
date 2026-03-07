@@ -20,6 +20,7 @@ pub enum Action {
     Select(PathBuf),
     Delete(PathBuf),
     Resume(PathBuf),
+    ForkResume(PathBuf),
     Quit,
 }
 
@@ -950,6 +951,15 @@ impl App {
                 }
             }
 
+            // Ctrl+F - fork-resume (disabled in single file mode)
+            KeyCode::Char('f') if modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.single_file_mode {
+                    None
+                } else {
+                    self.get_selected_path().map(Action::ForkResume)
+                }
+            }
+
             // Ctrl+C - quit the app
             KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => Some(Action::Quit),
 
@@ -1152,6 +1162,9 @@ impl App {
             }
             KeyCode::Char('r') if modifiers.contains(KeyModifiers::CONTROL) => {
                 self.get_selected_path().map(Action::Resume)
+            }
+            KeyCode::Char('f') if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.get_selected_path().map(Action::ForkResume)
             }
             // Ctrl+O - select and exit (for scripting, --show-path)
             KeyCode::Char('o') if modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1535,7 +1548,7 @@ pub fn run(
                             let _ = debug_log::log_selected_path(path);
                             return Ok(action);
                         }
-                        Action::Resume(ref path) => {
+                        Action::Resume(ref path) | Action::ForkResume(ref path) => {
                             let _ = debug_log::log_selected_path(path);
                             return Ok(action);
                         }

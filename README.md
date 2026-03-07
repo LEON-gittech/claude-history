@@ -60,6 +60,7 @@ preview.
 | `Ctrl+O`                | Select and exit (for scripting) |
 | `Ctrl+W`                | Delete word before cursor       |
 | `Ctrl+R`                | Resume conversation             |
+| `Ctrl+F`                | Fork and resume conversation    |
 | `Ctrl+X`                | Delete conversation             |
 | `?`                     | Show keyboard shortcuts         |
 | `Esc` / `Ctrl+C`        | Quit                            |
@@ -85,6 +86,7 @@ preview.
 | `Y`            | Copy file path to clipboard                        |
 | `I`            | Copy session ID to clipboard                       |
 | `Ctrl+R`       | Resume conversation                                |
+| `Ctrl+F`       | Fork and resume conversation                       |
 | `Ctrl+X`       | Delete conversation                                |
 | `?`            | Show keyboard shortcuts                            |
 | `q` / `Esc`    | Return to list (or quit in direct file input mode) |
@@ -154,6 +156,7 @@ Options:
       --show-thinking    Show thinking blocks in the conversation output
       --hide-thinking    Hide thinking blocks from the conversation output
   -c, --resume           Resume the selected conversation in Claude Code
+      --fork-session     Fork the session when resuming
   -p, --show-path        Print the selected conversation file path
   -i, --show-id          Print the selected conversation session ID
       --plain            Output plain text without ledger formatting
@@ -191,6 +194,10 @@ distinguish them from top-level conversation entries.
 
 If you want to continue a conversation, launch `claude-history` with `--resume`
 and it will hand off to `claude --resume <conversation-id>`.
+
+To fork a conversation (creating a new session branching from the original),
+use `--resume --fork-session` or press `Ctrl+F` in the TUI. This passes
+`--fork-session` to the `claude` command.
 
 You can configure default arguments to pass to the `claude` command every time
 you resume a conversation. This is useful if you typically run Claude with
@@ -344,6 +351,7 @@ pager = true
 [resume]
 # Default arguments to pass to claude command when resuming
 # Example: default_args = ["--dangerously-skip-permissions"]
+
 EOF
 ```
 
@@ -376,6 +384,7 @@ EOF
   when resuming conversations. Useful for flags like
   `--dangerously-skip-permissions` that you want applied every time you resume.
   Example: `default_args = ["--dangerously-skip-permissions", "--verbose"]`
+
 
 ### Overriding config
 

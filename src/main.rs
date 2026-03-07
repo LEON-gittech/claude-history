@@ -151,7 +151,13 @@ fn run() -> Result<()> {
             (tui::Action::Resume(path), convs) => {
                 let conv = convs.iter().find(|c| c.path == path);
                 let project_path = conv.and_then(|c| c.project_path.as_ref());
-                resume_with_claude(&path, project_path, default_args)?;
+                resume_with_claude(&path, project_path, default_args, false)?;
+                return Ok(());
+            }
+            (tui::Action::ForkResume(path), convs) => {
+                let conv = convs.iter().find(|c| c.path == path);
+                let project_path = conv.and_then(|c| c.project_path.as_ref());
+                resume_with_claude(&path, project_path, default_args, true)?;
                 return Ok(());
             }
             (tui::Action::Quit, _) => return Err(AppError::SelectionCancelled),
@@ -196,7 +202,13 @@ fn run() -> Result<()> {
             tui::Action::Resume(path) => {
                 let conv = conversations.iter().find(|c| c.path == path);
                 let project_path = conv.and_then(|c| c.project_path.as_ref());
-                resume_with_claude(&path, project_path, default_args)?;
+                resume_with_claude(&path, project_path, default_args, false)?;
+                return Ok(());
+            }
+            tui::Action::ForkResume(path) => {
+                let conv = conversations.iter().find(|c| c.path == path);
+                let project_path = conv.and_then(|c| c.project_path.as_ref());
+                resume_with_claude(&path, project_path, default_args, true)?;
                 return Ok(());
             }
             tui::Action::Quit => return Err(AppError::SelectionCancelled),
@@ -240,7 +252,12 @@ fn run() -> Result<()> {
             }
         }
         let project_path = conv.and_then(|c| c.project_path.as_ref());
-        resume_with_claude(&selected_path, project_path, default_args)?;
+        resume_with_claude(
+            &selected_path,
+            project_path,
+            default_args,
+            args.fork_session,
+        )?;
         return Ok(());
     }
 
@@ -286,6 +303,7 @@ fn resume_with_claude(
     selected_path: &Path,
     project_path: Option<&PathBuf>,
     default_args: &[String],
+    fork_session: bool,
 ) -> Result<()> {
     let conversation_id = selected_path
         .file_stem()
@@ -313,6 +331,9 @@ fn resume_with_claude(
 
     let mut command = Command::new("claude");
     command.args(["--resume", &conversation_id]);
+    if fork_session {
+        command.arg("--fork-session");
+    }
     command.args(default_args);
     command.current_dir(project_dir);
 

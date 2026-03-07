@@ -180,6 +180,8 @@ fn render_list_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(" open  ", action_label),
         Span::styled("^R", action_key),
         Span::styled(" resume  ", action_label),
+        Span::styled("^F", action_key),
+        Span::styled(" fork  ", action_label),
         Span::styled("^X", action_key),
         Span::styled(" delete  ", action_label),
         Span::styled("?", key_style),
@@ -604,6 +606,8 @@ fn render_view_status_bar(frame: &mut Frame, app: &App, state: &ViewState, area:
             Span::styled("ank  ", label_style),
             Span::styled("^R", key_style),
             Span::styled(" resume  ", label_style),
+            Span::styled("^F", key_style),
+            Span::styled(" fork  ", label_style),
             Span::styled("^X", key_style),
             Span::styled(" del  ", label_style),
             Span::styled("q", key_style),
@@ -937,6 +941,7 @@ fn render_help_overlay(frame: &mut Frame, is_view_mode: bool, is_single_file_mod
             ("Y", "Copy path"),
             ("I", "Copy session ID"),
             ("Ctrl+R", "Resume"),
+            ("Ctrl+F", "Fork resume"),
             ("Ctrl+X", "Delete"),
             ("q / Esc", exit_text),
         ]
@@ -952,6 +957,7 @@ fn render_help_overlay(frame: &mut Frame, is_view_mode: bool, is_single_file_mod
             ("Ctrl+O", "Select and exit"),
             ("Ctrl+W", "Delete word"),
             ("Ctrl+R", "Resume"),
+            ("Ctrl+F", "Fork resume"),
             ("Ctrl+X", "Delete"),
             ("Esc", "Quit"),
         ]
