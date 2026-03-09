@@ -27,11 +27,11 @@ pub fn is_uuid(query: &str) -> bool {
         .all(|(part, &len)| part.len() == len && part.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
-/// Normalize text for search: lowercase and replace underscores with spaces
+/// Normalize text for search: lowercase and replace separators with spaces
 pub fn normalize_for_search(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for ch in text.chars() {
-        if ch == '_' {
+        if ch == '_' || ch == '-' || ch == '/' {
             out.push(' ');
         } else {
             out.extend(ch.to_lowercase());
@@ -42,7 +42,7 @@ pub fn normalize_for_search(text: &str) -> String {
 
 /// Check if a character is a word separator for search purposes
 pub fn is_word_separator(c: char) -> bool {
-    c.is_whitespace() || c == '_'
+    c.is_whitespace() || c == '_' || c == '-' || c == '/'
 }
 
 /// Precompute lowercased search text for all conversations
@@ -50,9 +50,16 @@ pub fn precompute_search_text(conversations: &[Conversation]) -> Vec<SearchableC
     conversations
         .par_iter()
         .enumerate()
-        .map(|(idx, conv)| SearchableConversation {
-            text_lower: normalize_for_search(&conv.full_text),
-            index: idx,
+        .map(|(idx, conv)| {
+            let mut text = conv.full_text.clone();
+            if let Some(ref name) = conv.project_name {
+                text.push(' ');
+                text.push_str(name);
+            }
+            SearchableConversation {
+                text_lower: normalize_for_search(&text),
+                index: idx,
+            }
         })
         .collect()
 }
@@ -268,6 +275,48 @@ mod tests {
         let now = Local::now();
         let timestamp = now + Duration::hours(1);
         assert_eq!(recency_multiplier(timestamp, now), 3.0);
+    }
+
+    fn make_conv_with_project(
+        text: &str,
+        project: &str,
+        timestamp: DateTime<Local>,
+    ) -> Conversation {
+        let mut conv = make_conv(text, timestamp);
+        conv.project_name = Some(project.to_string());
+        conv
+    }
+
+    #[test]
+    fn search_matches_project_name() {
+        let now = Local::now();
+        let convs = vec![make_conv_with_project(
+            "some conversation",
+            "workmux/main-worktree-fix",
+            now,
+        )];
+        let searchable = precompute_search_text(&convs);
+
+        // Match worktree name
+        let results = search(&convs, &searchable, "main-worktree-fix", now);
+        assert_eq!(results.len(), 1);
+
+        // Match with project prefix
+        let results = search(&convs, &searchable, "workmux", now);
+        assert_eq!(results.len(), 1);
+
+        // Match project/worktree combined
+        let results = search(&convs, &searchable, "workmux main worktree", now);
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn search_matches_hyphenated_words() {
+        let now = Local::now();
+        let convs = vec![make_conv("main-worktree-fix discussion", now)];
+        let searchable = precompute_search_text(&convs);
+        let results = search(&convs, &searchable, "worktree fix", now);
+        assert_eq!(results.len(), 1);
     }
 
     #[test]
