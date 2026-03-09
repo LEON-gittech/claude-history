@@ -13,7 +13,7 @@ use crate::debug;
 use crate::error::{AppError, Result};
 use rayon::prelude::*;
 use std::fs::read_dir;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::SystemTime;
@@ -164,6 +164,31 @@ fn load_all_streaming_inner(
     });
 
     let _ = tx.send(LoaderMessage::Done);
+}
+
+/// Find a session JSONL file by UUID across all projects.
+/// Returns the path to the `.jsonl` file if found.
+pub fn find_jsonl_by_uuid(uuid: &str) -> Result<Option<PathBuf>> {
+    let root = super::get_claude_projects_root()?;
+    if !root.exists() {
+        return Ok(None);
+    }
+
+    let filename = format!("{}.jsonl", uuid);
+
+    for entry in read_dir(&root)? {
+        let entry = entry?;
+        let project_dir = entry.path();
+        if !project_dir.is_dir() {
+            continue;
+        }
+        let candidate = project_dir.join(&filename);
+        if candidate.exists() {
+            return Ok(Some(candidate));
+        }
+    }
+
+    Ok(None)
 }
 
 /// List all projects that contain conversation files

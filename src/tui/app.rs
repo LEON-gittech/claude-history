@@ -334,6 +334,17 @@ impl App {
 
     /// Update filtered results based on current query
     fn update_filter(&mut self) {
+        let query = self.query.trim().to_string();
+
+        // UUID search: find session by UUID across all projects
+        if search::is_uuid(&query)
+            && let Some(idx) = self.find_or_load_uuid(&query)
+        {
+            self.filtered = vec![idx];
+            self.selected = Some(0);
+            return;
+        }
+
         let now = Local::now();
         self.filtered = search::search(&self.conversations, &self.searchable, &self.query, now);
         self.selected = if self.filtered.is_empty() {
@@ -341,6 +352,34 @@ impl App {
         } else {
             Some(0)
         };
+    }
+
+    /// Find a conversation by UUID in loaded conversations, or load it from disk.
+    fn find_or_load_uuid(&mut self, uuid: &str) -> Option<usize> {
+        // Check already-loaded conversations
+        let uuid_jsonl = format!("{}.jsonl", uuid);
+        for (idx, conv) in self.conversations.iter().enumerate() {
+            if conv
+                .path
+                .file_name()
+                .is_some_and(|f| f.to_string_lossy() == uuid_jsonl)
+            {
+                return Some(idx);
+            }
+        }
+
+        // Try to find and load from filesystem
+        let path = crate::history::find_jsonl_by_uuid(uuid).ok()??;
+        let modified = path.metadata().ok().and_then(|m| m.modified().ok());
+        let conv =
+            crate::history::process_conversation_file(path, false, modified, None).ok()??;
+        let idx = self.conversations.len();
+        self.conversations.push(conv);
+
+        // Rebuild search index to include the new conversation
+        self.searchable = search::precompute_search_text(&self.conversations);
+
+        Some(idx)
     }
 
     /// Move selection up

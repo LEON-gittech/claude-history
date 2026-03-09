@@ -10,6 +10,23 @@ pub struct SearchableConversation {
     pub index: usize,
 }
 
+/// Check if a query looks like a UUID (e.g., e7d318b1-4274-4ee2-a341-e94893b5df49)
+pub fn is_uuid(query: &str) -> bool {
+    let q = query.trim();
+    if q.len() != 36 {
+        return false;
+    }
+    let parts: Vec<&str> = q.split('-').collect();
+    if parts.len() != 5 {
+        return false;
+    }
+    let expected_lens = [8, 4, 4, 4, 12];
+    parts
+        .iter()
+        .zip(expected_lens.iter())
+        .all(|(part, &len)| part.len() == len && part.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
 /// Normalize text for search: lowercase and replace underscores with spaces
 pub fn normalize_for_search(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -251,5 +268,27 @@ mod tests {
         let now = Local::now();
         let timestamp = now + Duration::hours(1);
         assert_eq!(recency_multiplier(timestamp, now), 3.0);
+    }
+
+    #[test]
+    fn is_uuid_valid() {
+        assert!(is_uuid("e7d318b1-4274-4ee2-a341-e94893b5df49"));
+        assert!(is_uuid("00000000-0000-0000-0000-000000000000"));
+        assert!(is_uuid("ABCDEF01-2345-6789-abcd-ef0123456789"));
+    }
+
+    #[test]
+    fn is_uuid_invalid() {
+        assert!(!is_uuid(""));
+        assert!(!is_uuid("not-a-uuid"));
+        assert!(!is_uuid("e7d318b1-4274-4ee2-a341")); // too short
+        assert!(!is_uuid("e7d318b1-4274-4ee2-a341-e94893b5df49x")); // too long
+        assert!(!is_uuid("e7d318b14274-4ee2-a341-e94893b5df49-")); // wrong grouping
+        assert!(!is_uuid("g7d318b1-4274-4ee2-a341-e94893b5df49")); // non-hex char
+    }
+
+    #[test]
+    fn is_uuid_with_whitespace() {
+        assert!(is_uuid("  e7d318b1-4274-4ee2-a341-e94893b5df49  "));
     }
 }

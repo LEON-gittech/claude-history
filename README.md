@@ -101,6 +101,7 @@ Search uses fuzzy word matching with the following features:
 - **Prefix matching**: "auth" matches "authentication", "authorize"
 - **Word boundary**: matches start at word boundaries, so "red" won't match inside "fired"
 - **Multi-word AND logic**: all query words must match, each word is highlighted individually
+- **UUID lookup**: paste a full session UUID (e.g. `e7d318b1-4274-4ee2-a341-e94893b5df49`) to jump directly to that session, even if it belongs to a different project
 
 Results are ranked by recency, so recent conversations appear first.
 
