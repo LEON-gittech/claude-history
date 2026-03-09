@@ -172,8 +172,8 @@ Options:
 
 ### Preview modes
 
-- `claude-history` shows the first messages in the preview
-- `claude-history --last` flips the preview to the last messages
+- `claude-history` shows the last messages in the preview (default)
+- `claude-history --first` flips the preview to the first messages
 
 ### Showing tool calls
 
@@ -339,8 +339,8 @@ cat > ~/.config/claude-history/config.toml << 'EOF'
 # Tool display: true = hidden, false = full (default: unset = truncated)
 # no_tools = false
 
-# Show last messages in TUI preview (default: false)
-last = false
+# Show last messages in TUI preview (default: true)
+# last = true
 
 # Use relative time formatting (default: false)
 relative_time = true

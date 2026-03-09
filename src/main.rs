@@ -86,7 +86,7 @@ fn run() -> Result<()> {
             None => tui::ToolDisplayMode::Truncated,
         }
     };
-    let show_last = resolve_bool_setting(args.last, args.first, display_config.last, false);
+    let show_last = resolve_bool_setting(args.last, args.first, display_config.last, true);
     let use_relative_time = resolve_bool_setting(
         args.relative_time,
         args.absolute_time,

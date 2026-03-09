@@ -60,7 +60,7 @@ pub struct Args {
     )]
     pub show_dir: bool,
 
-    /// Show the last messages in the TUI preview
+    /// Show the last messages in the TUI preview (default)
     #[arg(long, short = 'l', group = "preview_content")]
     pub last: bool,
 
