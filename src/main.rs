@@ -91,12 +91,6 @@ fn run() -> Result<()> {
         }
     };
     let show_last = resolve_bool_setting(args.last, args.first, display_config.last, true);
-    let use_relative_time = resolve_bool_setting(
-        args.relative_time,
-        args.absolute_time,
-        display_config.relative_time,
-        false,
-    );
     let show_thinking = resolve_bool_setting(
         args.show_thinking,
         args.hide_thinking,
@@ -137,13 +131,7 @@ fn run() -> Result<()> {
                 format!("Not a file: {}", input_file.display()),
             )));
         }
-        tui::run_single_file(
-            input_file.clone(),
-            use_relative_time,
-            tool_display,
-            show_thinking,
-            keys,
-        )?;
+        tui::run_single_file(input_file.clone(), tool_display, show_thinking, keys)?;
         return Ok(());
     }
 
@@ -154,7 +142,7 @@ fn run() -> Result<()> {
         // Global Search (-g) - use streaming loader for instant startup
         let rx = history::load_all_conversations_streaming(show_last, args.debug);
 
-        match tui::run_with_loader(rx, use_relative_time, tool_display, show_thinking, keys)? {
+        match tui::run_with_loader(rx, tool_display, show_thinking, keys)? {
             (tui::Action::Select(path), convs) => (convs, path),
             (tui::Action::Resume(path), convs) => {
                 let conv = convs.iter().find(|c| c.path == path);
@@ -200,13 +188,7 @@ fn run() -> Result<()> {
             return Err(AppError::NoHistoryFound("selected scope".to_string()));
         }
 
-        match tui::run(
-            conversations.clone(),
-            use_relative_time,
-            tool_display,
-            show_thinking,
-            keys,
-        )? {
+        match tui::run(conversations.clone(), tool_display, show_thinking, keys)? {
             tui::Action::Select(path) => (conversations, path),
             tui::Action::Resume(path) => {
                 let conv = conversations.iter().find(|c| c.path == path);

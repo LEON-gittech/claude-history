@@ -21,6 +21,9 @@ pub struct ConfigFile {
 pub struct DisplayConfig {
     pub no_tools: Option<bool>,
     pub last: Option<bool>,
+    /// Deprecated: timestamps now always use hybrid relative/absolute format.
+    /// Kept for backwards compatibility with existing config files.
+    #[allow(dead_code)]
     pub relative_time: Option<bool>,
     pub show_thinking: Option<bool>,
     pub plain: Option<bool>,

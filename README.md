@@ -155,8 +155,6 @@ Options:
   -d, --show-dir         Print the conversation directory path and exit
   -l, --last             Show the last messages in the TUI preview
       --first            Show the first messages in the TUI preview
-  -r, --relative-time    Display relative time (e.g. "10 minutes ago")
-      --absolute-time    Display absolute timestamp
       --show-thinking    Show thinking blocks in the conversation output
       --hide-thinking    Hide thinking blocks from the conversation output
   -c, --resume           Resume the selected conversation in Claude Code
@@ -345,9 +343,6 @@ cat > ~/.config/claude-history/config.toml << 'EOF'
 # Show last messages in TUI preview (default: true)
 # last = true
 
-# Use relative time formatting (default: false)
-relative_time = true
-
 # Show thinking blocks (default: false)
 show_thinking = false
 
@@ -382,8 +377,6 @@ EOF
   in full. When unset (default), tools display in truncated mode
 - `last` (boolean): Show last messages instead of first in TUI preview (default:
   false)
-- `relative_time` (boolean): Display relative time instead of absolute timestamp
-  (default: false)
 - `show_thinking` (boolean): Show thinking blocks and subagent internals in
   conversation output
   (default: false)
@@ -415,7 +408,6 @@ Each display option has opposing flags for explicit override:
 
 - `--no-tools` / `--show-tools`
 - `--last` / `--first`
-- `--relative-time` / `--absolute-time`
 - `--hide-thinking` / `--show-thinking`
 - `--plain` (no opposite flag)
 - `--no-pager` / `--pager`

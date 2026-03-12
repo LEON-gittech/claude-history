@@ -135,8 +135,6 @@ pub struct App {
     query: String,
     /// Cursor position in query (character index, not byte)
     cursor_pos: usize,
-    /// Whether to use relative time display
-    use_relative_time: bool,
     /// Loading state
     loading_state: LoadingState,
     /// Current dialog overlay (confirm, menu)
@@ -161,7 +159,6 @@ impl App {
     /// Create a new app with all conversations pre-loaded (existing behavior)
     pub fn new(
         conversations: Vec<Conversation>,
-        use_relative_time: bool,
         tool_display: ToolDisplayMode,
         show_thinking: bool,
         keys: KeyBindings,
@@ -177,7 +174,6 @@ impl App {
             selected,
             query: String::new(),
             cursor_pos: 0,
-            use_relative_time,
             loading_state: LoadingState::Ready,
             dialog_mode: DialogMode::None,
             app_mode: AppMode::List,
@@ -192,7 +188,6 @@ impl App {
 
     /// Create a new app in loading state
     pub fn new_loading(
-        use_relative_time: bool,
         tool_display: ToolDisplayMode,
         show_thinking: bool,
         keys: KeyBindings,
@@ -204,7 +199,6 @@ impl App {
             selected: None,
             query: String::new(),
             cursor_pos: 0,
-            use_relative_time,
             loading_state: LoadingState::Loading { loaded: 0 },
             dialog_mode: DialogMode::None,
             app_mode: AppMode::List,
@@ -220,7 +214,6 @@ impl App {
     /// Create a new app for viewing a single file directly
     pub fn new_single_file(
         path: PathBuf,
-        use_relative_time: bool,
         tool_display: ToolDisplayMode,
         show_thinking: bool,
         keys: KeyBindings,
@@ -249,7 +242,6 @@ impl App {
             selected,
             query: String::new(),
             cursor_pos: 0,
-            use_relative_time,
             loading_state: LoadingState::Ready,
             dialog_mode: DialogMode::None,
             app_mode: AppMode::View(ViewState {
@@ -481,10 +473,6 @@ impl App {
 
     pub fn query(&self) -> &str {
         &self.query
-    }
-
-    pub fn use_relative_time(&self) -> bool {
-        self.use_relative_time
     }
 
     pub fn dialog_mode(&self) -> &DialogMode {
@@ -1551,7 +1539,6 @@ fn drain_events(wait: Duration) -> Result<Vec<Event>> {
 /// Run the TUI and return the selected conversation path or None if cancelled
 pub fn run(
     conversations: Vec<Conversation>,
-    use_relative_time: bool,
     tool_display: ToolDisplayMode,
     show_thinking: bool,
     keys: KeyBindings,
@@ -1565,13 +1552,7 @@ pub fn run(
     }));
 
     let mut guard = TerminalGuard::new()?;
-    let mut app = App::new(
-        conversations,
-        use_relative_time,
-        tool_display,
-        show_thinking,
-        keys,
-    );
+    let mut app = App::new(conversations, tool_display, show_thinking, keys);
 
     loop {
         let frame_area = guard.terminal.get_frame().area();
@@ -1660,7 +1641,6 @@ pub fn run(
 /// Returns the action and the final list of conversations
 pub fn run_with_loader(
     rx: Receiver<LoaderMessage>,
-    use_relative_time: bool,
     tool_display: ToolDisplayMode,
     show_thinking: bool,
     keys: KeyBindings,
@@ -1674,7 +1654,7 @@ pub fn run_with_loader(
     }));
 
     let mut guard = TerminalGuard::new()?;
-    let mut app = App::new_loading(use_relative_time, tool_display, show_thinking, keys);
+    let mut app = App::new_loading(tool_display, show_thinking, keys);
 
     loop {
         // Process all pending loader messages (non-blocking)
@@ -1798,7 +1778,6 @@ pub fn run_with_loader(
 /// Run the TUI for a single file (direct input mode)
 pub fn run_single_file(
     path: PathBuf,
-    use_relative_time: bool,
     tool_display: ToolDisplayMode,
     show_thinking: bool,
     keys: KeyBindings,
@@ -1812,7 +1791,7 @@ pub fn run_single_file(
     }));
 
     let mut guard = TerminalGuard::new()?;
-    let mut app = App::new_single_file(path, use_relative_time, tool_display, show_thinking, keys);
+    let mut app = App::new_single_file(path, tool_display, show_thinking, keys);
 
     loop {
         let frame_area = guard.terminal.get_frame().area();

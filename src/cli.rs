@@ -68,14 +68,6 @@ pub struct Args {
     #[arg(long, group = "preview_content")]
     pub first: bool,
 
-    /// Display relative time (e.g. "10 minutes ago")
-    #[arg(long, short = 'r', group = "time_display")]
-    pub relative_time: bool,
-
-    /// Display absolute timestamp
-    #[arg(long, group = "time_display")]
-    pub absolute_time: bool,
-
     /// Show thinking blocks and subagent internals in the conversation output
     #[arg(long, group = "thinking_display")]
     pub show_thinking: bool,

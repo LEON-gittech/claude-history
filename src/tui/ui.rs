@@ -5,7 +5,6 @@ use crate::tui::app::{
 use crate::tui::search::normalize_for_search;
 use crate::tui::theme::{self, Theme};
 use chrono::{DateTime, Local};
-use chrono_humanize::{Accuracy, HumanTime, Tense};
 use ratatui::layout::Position;
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph};
@@ -1077,6 +1076,9 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
     // Cache separator string (same for all items in this frame)
     let separator_str = "─".repeat(width);
 
+    // Compute now once for consistent relative timestamps across all visible items
+    let now = Local::now();
+
     // Only build ListItems for the visible range
     let visible_items: Vec<ListItem> = app
         .filtered()
@@ -1089,12 +1091,8 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
             let conv = &app.conversations()[conv_idx];
             let is_selected = app.selected() == Some(list_idx);
 
-            // Format timestamp
-            let timestamp = if app.use_relative_time() {
-                format_relative_time(conv.timestamp)
-            } else {
-                conv.timestamp.format("%b %d, %H:%M").to_string()
-            };
+            // Format timestamp (hybrid: relative for recent, absolute for older)
+            let timestamp = format_timestamp(conv.timestamp, now);
 
             // Format message count
             let msg_count = if conv.message_count == 1 {
@@ -1342,9 +1340,43 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(list, area);
 }
 
-fn format_relative_time(timestamp: DateTime<Local>) -> String {
-    let delta = timestamp.signed_duration_since(Local::now());
-    HumanTime::from(delta).to_text_en(Accuracy::Rough, Tense::Present)
+/// Format a timestamp as relative time for recent entries, absolute for older ones.
+/// Threshold: entries within the last 7 days show relative time.
+fn format_timestamp(timestamp: DateTime<Local>, now: DateTime<Local>) -> String {
+    let age = now.signed_duration_since(timestamp);
+
+    // Future timestamps (clock skew): show absolute
+    if age.num_seconds() < 0 {
+        return timestamp.format("%b %d, %H:%M").to_string();
+    }
+
+    let seconds = age.num_seconds();
+    let minutes = age.num_minutes();
+    let hours = age.num_hours();
+
+    if seconds < 60 {
+        return "just now".to_string();
+    }
+    if minutes < 60 {
+        return format!("{minutes} min ago");
+    }
+    if hours < 24 {
+        return format!("{hours} hour{} ago", if hours == 1 { "" } else { "s" });
+    }
+
+    // Use calendar day difference for "yesterday" accuracy
+    let day_diff = now
+        .date_naive()
+        .signed_duration_since(timestamp.date_naive())
+        .num_days();
+    if day_diff == 1 {
+        return "yesterday".to_string();
+    }
+    if day_diff < 7 {
+        return format!("{day_diff} days ago");
+    }
+
+    timestamp.format("%b %d, %H:%M").to_string()
 }
 
 /// Truncate text to max_width chars, adding "…" suffix if truncated.
