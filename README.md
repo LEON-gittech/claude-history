@@ -2,6 +2,8 @@
 
 <img src="/meta/screenshot.webp" />
 
+> _"This is the best thing ever thanks for this project."_ — [@andrewle8](https://github.com/andrewle8)
+
 `claude-history` is a companion CLI for Claude Code. It lets you search recent
 conversations recorded in Claude's local project history with a built-in
 terminal UI, then view the selected transcript directly in the terminal with
