@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.36 (2026-03-12)
+
+- Added message-level navigation — press `J`/`K` or `[`/`]` to jump between
+  messages in the conversation viewer, with a teal marker showing the focused
+  message ([#15](https://github.com/raine/claude-history/pull/15))
+- Added single message copy — press `y` to copy the currently selected message
+  to the clipboard instead
+  ([#15](https://github.com/raine/claude-history/pull/15))
+- Fixed empty thinking blocks rendering as blank "Thinking" labels with no
+  content
+
 ## v0.1.35 (2026-03-12)
 
 - Timestamps in the conversation list now automatically switch between relative
