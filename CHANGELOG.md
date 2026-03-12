@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.33 (2026-03-12)
+
+- Added automatic light/dark theme detection — the TUI now adapts its color
+  scheme to match your terminal background
+- Fixed arrow key navigation lag when holding keys to scroll quickly through the
+  list or conversation viewer
+- Fixed slow redraw when pasting text into the search field
+
 ## v0.1.32 (2026-03-12)
 
 - Fixed clipboard copy/yank not working on Linux — now uses `wl-copy` on Wayland
