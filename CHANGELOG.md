@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.35 (2026-03-12)
+
+- Timestamps in the conversation list now automatically switch between relative
+  ("just now", "5 min ago", "2 hours ago", "yesterday") for recent sessions and
+  absolute ("Mar 05, 14:30") for older ones
+- Recent conversations are color-graded by recency — newest sessions appear in
+  bright teal, fading to gray as they get older, making it easy to spot recent
+  activity at a glance
+- Removed `--relative-time`/`--absolute-time` flags and `display.relative_time`
+  config option — the new hybrid format replaces both
+
 ## v0.1.34 (2026-03-12)
 
 - Search now covers tool output (command results, file contents, grep output),
