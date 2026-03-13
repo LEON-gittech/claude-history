@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.37 (2026-03-13)
+
+- Linux prebuilt binaries are now statically linked, fixing compatibility issues
+  on older distros with outdated glibc versions
+  ([#20](https://github.com/raine/claude-history/issues/20))
+
 ## v0.1.36 (2026-03-12)
 
 - Added message-level navigation — press `J`/`K` or `[`/`]` to jump between
