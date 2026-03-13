@@ -27,11 +27,39 @@ pub fn is_uuid(query: &str) -> bool {
         .all(|(part, &len)| part.len() == len && part.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
-/// Normalize text for search: lowercase and replace separators with spaces
+/// Check if a character is CJK punctuation or symbol
+fn is_cjk_punctuation(c: char) -> bool {
+    matches!(c,
+        '\u{FF0C}' |  // fullwidth comma
+        '\u{3002}' |  // ideographic full stop
+        '\u{3001}' |  // ideographic comma
+        '\u{FF01}' |  // fullwidth exclamation
+        '\u{FF1F}' |  // fullwidth question mark
+        '\u{FF1B}' |  // fullwidth semicolon
+        '\u{FF1A}' |  // fullwidth colon
+        '\u{201C}' |  // left double quotation mark
+        '\u{201D}' |  // right double quotation mark
+        '\u{2018}' |  // left single quotation mark
+        '\u{2019}' |  // right single quotation mark
+        '\u{3010}' |  // left black lenticular bracket
+        '\u{3011}' |  // right black lenticular bracket
+        '\u{300A}' |  // left double angle bracket
+        '\u{300B}' |  // right double angle bracket
+        '\u{FF08}' |  // fullwidth left parenthesis
+        '\u{FF09}' |  // fullwidth right parenthesis
+        '\u{2014}' |  // em dash
+        '\u{2026}' |  // horizontal ellipsis
+        '\u{00B7}' |  // middle dot
+        '\u{3000}'..='\u{303F}'  // CJK Symbols and Punctuation block
+    )
+}
+
+/// Normalize text for search: lowercase, replace separators with spaces,
+/// and handle CJK punctuation as word boundaries
 pub fn normalize_for_search(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for ch in text.chars() {
-        if ch == '_' || ch == '-' || ch == '/' {
+        if ch == '_' || ch == '-' || ch == '/' || is_cjk_punctuation(ch) {
             out.push(' ');
         } else {
             out.extend(ch.to_lowercase());
@@ -42,7 +70,7 @@ pub fn normalize_for_search(text: &str) -> String {
 
 /// Check if a character is a word separator for search purposes
 pub fn is_word_separator(c: char) -> bool {
-    c.is_whitespace() || c == '_' || c == '-' || c == '/'
+    c.is_whitespace() || c == '_' || c == '-' || c == '/' || is_cjk_punctuation(c)
 }
 
 /// Precompute lowercased search text for all conversations
@@ -114,6 +142,7 @@ pub fn search(
 
 /// Score a conversation based on word prefix matching and recency.
 /// Each query word must be a prefix of at least one word in the text (AND logic).
+/// Falls back to substring matching when prefix matching fails (e.g. for CJK text).
 fn score_text(
     text_lower: &str,
     query_words: &[&str],
@@ -131,7 +160,7 @@ fn score_text(
         }
     }
 
-    // Single-pass word matching with tracking
+    // Single-pass word matching with tracking (prefix match = higher score)
     let mut matched = vec![false; query_words.len()];
     let mut remaining = query_words.len();
 
@@ -147,7 +176,11 @@ fn score_text(
         }
     }
 
-    0.0
+    // Fallback: all query words were found as substrings (passed fast rejection above)
+    // but not as word prefixes. This handles CJK text and other non-whitespace-delimited
+    // languages where substring matching is the appropriate strategy.
+    // Give a lower score than prefix matches so exact word matches rank higher.
+    (query_words.len() as f64) * 0.5 * recency_multiplier(timestamp, now)
 }
 
 /// Calculate recency multiplier based on age
@@ -339,5 +372,53 @@ mod tests {
     #[test]
     fn is_uuid_with_whitespace() {
         assert!(is_uuid("  e7d318b1-4274-4ee2-a341-e94893b5df49  "));
+    }
+
+    #[test]
+    fn search_matches_chinese_text_with_punctuation() {
+        let now = Local::now();
+        let convs = vec![make_conv(
+            "\u{9000}\u{51FA}\u{7801} 143 \u{5C31}\u{662F} SIGTERM\u{FF0C}\u{5C5E}\u{4E8E}\u{9884}\u{671F}\u{884C}\u{4E3A}\u{3002}\u{5F53}\u{524D}\u{65B0}\u{8FDB}",
+            now,
+        )];
+        let searchable = precompute_search_text(&convs);
+
+        // Should match Chinese text across CJK punctuation boundaries
+        let results = search(&convs, &searchable, "\u{5C5E}\u{4E8E}\u{9884}\u{671F}", now);
+        assert_eq!(results.len(), 1);
+
+        // Should match text before punctuation
+        let results = search(&convs, &searchable, "\u{9000}\u{51FA}\u{7801}", now);
+        assert_eq!(results.len(), 1);
+
+        // Should match mixed Chinese and English
+        let results = search(&convs, &searchable, "SIGTERM \u{9884}\u{671F}", now);
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn search_matches_chinese_substring_within_token() {
+        let now = Local::now();
+        let convs = vec![make_conv(
+            "\u{8FD9}\u{662F}\u{4E00}\u{4E2A}\u{6D4B}\u{8BD5}\u{4F1A}\u{8BDD}\u{5185}\u{5BB9}",
+            now,
+        )];
+        let searchable = precompute_search_text(&convs);
+
+        // Should find substring even without word boundaries
+        let results = search(&convs, &searchable, "\u{6D4B}\u{8BD5}\u{4F1A}\u{8BDD}", now);
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn cjk_punctuation_treated_as_separator() {
+        assert_eq!(
+            normalize_for_search("SIGTERM\u{FF0C}\u{5C5E}\u{4E8E}\u{9884}\u{671F}"),
+            "sigterm \u{5C5E}\u{4E8E}\u{9884}\u{671F}"
+        );
+        assert_eq!(
+            normalize_for_search("\u{884C}\u{4E3A}\u{3002}\u{5F53}\u{524D}"),
+            "\u{884C}\u{4E3A} \u{5F53}\u{524D}"
+        );
     }
 }

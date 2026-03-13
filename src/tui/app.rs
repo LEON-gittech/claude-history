@@ -527,6 +527,79 @@ impl App {
         }
     }
 
+    /// Move cursor to the beginning of the line (Ctrl+A)
+    fn cursor_home(&mut self) {
+        self.cursor_pos = 0;
+    }
+
+    /// Move cursor to the end of the line (Ctrl+E)
+    fn cursor_end(&mut self) {
+        self.cursor_pos = self.query.chars().count();
+    }
+
+    /// Move cursor one word to the left (Ctrl+Left / Alt+B)
+    fn cursor_word_left(&mut self) {
+        let chars: Vec<char> = self.query.chars().collect();
+        let mut pos = self.cursor_pos.min(chars.len());
+        // Skip separators to the left
+        while pos > 0 && search::is_word_separator(chars[pos - 1]) {
+            pos -= 1;
+        }
+        // Skip non-separators (the word)
+        while pos > 0 && !search::is_word_separator(chars[pos - 1]) {
+            pos -= 1;
+        }
+        self.cursor_pos = pos;
+    }
+
+    /// Move cursor one word to the right (Ctrl+Right / Alt+F)
+    fn cursor_word_right(&mut self) {
+        let chars: Vec<char> = self.query.chars().collect();
+        let len = chars.len();
+        let mut pos = self.cursor_pos.min(len);
+        // Skip non-separators (the word)
+        while pos < len && !search::is_word_separator(chars[pos]) {
+            pos += 1;
+        }
+        // Skip separators
+        while pos < len && search::is_word_separator(chars[pos]) {
+            pos += 1;
+        }
+        self.cursor_pos = pos;
+    }
+
+    /// Delete from cursor to end of line (Ctrl+K). Returns true if modified.
+    fn kill_to_end(&mut self) -> bool {
+        let len = self.query.chars().count();
+        if self.cursor_pos >= len {
+            return false;
+        }
+        let byte_pos = self
+            .query
+            .char_indices()
+            .nth(self.cursor_pos)
+            .map(|(i, _)| i)
+            .unwrap_or(self.query.len());
+        self.query.truncate(byte_pos);
+        true
+    }
+
+    /// Delete from beginning of line to cursor (Ctrl+U). Returns true if modified.
+    fn kill_to_start(&mut self) -> bool {
+        if self.cursor_pos == 0 {
+            return false;
+        }
+        let byte_pos = self
+            .query
+            .char_indices()
+            .nth(self.cursor_pos)
+            .map(|(i, _)| i)
+            .unwrap_or(self.query.len());
+        self.query.replace_range(..byte_pos, "");
+        self.cursor_pos = 0;
+        true
+    }
+
     /// Delete the word before the cursor (Ctrl+W behavior).
     /// Returns true if the query was modified.
     fn delete_word_backwards(&mut self) -> bool {
@@ -1097,6 +1170,16 @@ impl App {
                 KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
                     Some(Action::Quit)
                 }
+                // Ctrl+Left: move cursor one word left
+                KeyCode::Left if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.cursor_word_left();
+                    None
+                }
+                // Ctrl+Right: move cursor one word right
+                KeyCode::Right if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.cursor_word_right();
+                    None
+                }
                 KeyCode::Left => {
                     self.cursor_left();
                     None
@@ -1119,6 +1202,41 @@ impl App {
                 }
                 KeyCode::Char('p') if modifiers.contains(KeyModifiers::CONTROL) => {
                     self.select_prev();
+                    None
+                }
+                // Ctrl+A: cursor to beginning of line
+                KeyCode::Char('a') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.cursor_home();
+                    None
+                }
+                // Ctrl+E: cursor to end of line
+                KeyCode::Char('e') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.cursor_end();
+                    None
+                }
+                // Ctrl+B: cursor left (emacs-style)
+                KeyCode::Char('b') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.cursor_left();
+                    None
+                }
+                // Ctrl+F: cursor right (emacs-style)
+                KeyCode::Char('f') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.cursor_right();
+                    None
+                }
+                // Alt+B: move cursor one word left
+                KeyCode::Char('b') if modifiers.contains(KeyModifiers::ALT) => {
+                    self.cursor_word_left();
+                    None
+                }
+                // Alt+F: move cursor one word right
+                KeyCode::Char('f') if modifiers.contains(KeyModifiers::ALT) => {
+                    self.cursor_word_right();
+                    None
+                }
+                // Ctrl+K: kill from cursor to end of line
+                KeyCode::Char('k') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.kill_to_end();
                     None
                 }
                 KeyCode::PageUp => {
@@ -1193,6 +1311,16 @@ impl App {
             KeyCode::Esc => Some(Action::Quit),
             // Enter now triggers view mode entry (handled in run loop)
             KeyCode::Enter => None,
+            // Ctrl+Left: move cursor one word left
+            KeyCode::Left if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor_word_left();
+                None
+            }
+            // Ctrl+Right: move cursor one word right
+            KeyCode::Right if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor_word_right();
+                None
+            }
             KeyCode::Left => {
                 self.cursor_left();
                 None
@@ -1226,6 +1354,43 @@ impl App {
                 None
             }
             KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => Some(Action::Quit),
+            // Ctrl+A: cursor to beginning of line
+            KeyCode::Char('a') if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor_home();
+                None
+            }
+            // Ctrl+E: cursor to end of line
+            KeyCode::Char('e') if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor_end();
+                None
+            }
+            // Ctrl+B: cursor left (emacs-style)
+            KeyCode::Char('b') if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor_left();
+                None
+            }
+            // Ctrl+F: cursor right (emacs-style)
+            KeyCode::Char('f') if modifiers.contains(KeyModifiers::CONTROL) => {
+                self.cursor_right();
+                None
+            }
+            // Alt+B: move cursor one word left
+            KeyCode::Char('b') if modifiers.contains(KeyModifiers::ALT) => {
+                self.cursor_word_left();
+                None
+            }
+            // Alt+F: move cursor one word right
+            KeyCode::Char('f') if modifiers.contains(KeyModifiers::ALT) => {
+                self.cursor_word_right();
+                None
+            }
+            // Ctrl+K: kill from cursor to end of line
+            KeyCode::Char('k') if modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.kill_to_end() {
+                    self.update_filter();
+                }
+                None
+            }
             KeyCode::Char('n') if modifiers.contains(KeyModifiers::CONTROL) => {
                 self.select_next();
                 None
@@ -1239,9 +1404,11 @@ impl App {
                 self.select_half_page_down(viewport_height);
                 None
             }
-            // Ctrl+U - half page up (vim-style)
+            // Ctrl+U - kill from beginning of line to cursor (emacs-style)
             KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
-                self.select_half_page_up(viewport_height);
+                if self.kill_to_start() {
+                    self.update_filter();
+                }
                 None
             }
             // Ctrl+O - select and exit (for scripting, --show-path)

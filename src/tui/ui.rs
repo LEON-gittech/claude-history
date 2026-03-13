@@ -3,6 +3,7 @@ use crate::tui::app::{
     App, AppMode, DialogMode, LineStyle, LoadingState, RenderedLine, ViewSearchMode, ViewState,
 };
 use crate::tui::search::normalize_for_search;
+use unicode_width::UnicodeWidthChar;
 use crate::tui::theme::{self, Theme};
 use chrono::{DateTime, Local};
 use ratatui::layout::Position;
@@ -692,8 +693,10 @@ fn render_search_input(frame: &mut Frame, state: &ViewState, area: Rect) {
     let input = Paragraph::new(input_line).style(Style::default().bg(rgb(th().status_bar_bg)));
     frame.render_widget(input, area);
 
-    // Position cursor
-    let cursor_x = area.x + 3 + state.search_query.chars().count() as u16;
+    // Position cursor (account for "  /" prefix = 3 columns)
+    let cursor_x = area.x + 3 + state.search_query.chars()
+        .map(|c| UnicodeWidthChar::width(c).unwrap_or(0) as u16)
+        .sum::<u16>();
     frame.set_cursor_position(Position::new(cursor_x, area.y));
 }
 
@@ -846,11 +849,11 @@ fn render_search_bar(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     // Build search line: " ❯ query" on left, "status " on right
-    let prompt = " ❯ ";
     let query = app.query();
-    let left_len = prompt.chars().count() + query.chars().count();
+    // prefix " ❯ " is 3 display columns
+    let left_width = 3 + query.chars().map(|c| UnicodeWidthChar::width(c).unwrap_or(0)).sum::<usize>();
     let count_len = status_text.chars().count() + 1; // +1 for trailing space
-    let padding = (area.width as usize).saturating_sub(left_len + count_len + 1);
+    let padding = (area.width as usize).saturating_sub(left_width + count_len + 1);
 
     // Prompt is always active - user can type during loading
     let prompt_style = Style::default().fg(rgb(th().accent));
@@ -878,9 +881,14 @@ fn render_search_bar(frame: &mut Frame, app: &App, area: Rect) {
 
     frame.render_widget(input, area);
 
-    // Position cursor at cursor_pos (account for " ❯ " prefix)
+    // Position cursor at cursor_pos (account for " ❯ " prefix = 3 columns)
     if area.width > 3 {
-        let cursor_offset = app.cursor_pos() as u16;
+        let cursor_offset: u16 = app
+            .query()
+            .chars()
+            .take(app.cursor_pos())
+            .map(|c| UnicodeWidthChar::width(c).unwrap_or(0) as u16)
+            .sum();
         let max_x = area.x + area.width.saturating_sub(2);
         let cursor_x = (area.x + 3).saturating_add(cursor_offset).min(max_x);
         frame.set_cursor_position(Position::new(cursor_x, area.y));
