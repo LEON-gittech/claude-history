@@ -183,24 +183,30 @@ fn run() -> Result<()> {
     // Always use streaming global loader for all conversations
     let rx = history::load_all_conversations_streaming(show_last, args.debug);
 
-    let (conversations, selected_path) =
-        match tui::run_with_loader(rx, tool_display, show_thinking, keys, workspace_filter, current_project_dir_name)? {
-            (tui::Action::Select(path), convs) => (convs, path),
-            (tui::Action::Resume(path), convs) => {
-                let conv = convs.iter().find(|c| c.path == path);
-                let project_path = conv.and_then(|c| c.project_path.as_ref());
-                resume_with_claude(&path, project_path, default_args, false)?;
-                return Ok(());
-            }
-            (tui::Action::ForkResume(path), convs) => {
-                let conv = convs.iter().find(|c| c.path == path);
-                let project_path = conv.and_then(|c| c.project_path.as_ref());
-                resume_with_claude(&path, project_path, default_args, true)?;
-                return Ok(());
-            }
-            (tui::Action::Quit, _) => return Err(AppError::SelectionCancelled),
-            (tui::Action::Delete(_), _) => unreachable!("Delete is handled internally"),
-        };
+    let (conversations, selected_path) = match tui::run_with_loader(
+        rx,
+        tool_display,
+        show_thinking,
+        keys,
+        workspace_filter,
+        current_project_dir_name,
+    )? {
+        (tui::Action::Select(path), convs) => (convs, path),
+        (tui::Action::Resume(path), convs) => {
+            let conv = convs.iter().find(|c| c.path == path);
+            let project_path = conv.and_then(|c| c.project_path.as_ref());
+            resume_with_claude(&path, project_path, default_args, false)?;
+            return Ok(());
+        }
+        (tui::Action::ForkResume(path), convs) => {
+            let conv = convs.iter().find(|c| c.path == path);
+            let project_path = conv.and_then(|c| c.project_path.as_ref());
+            resume_with_claude(&path, project_path, default_args, true)?;
+            return Ok(());
+        }
+        (tui::Action::Quit, _) => return Err(AppError::SelectionCancelled),
+        (tui::Action::Delete(_), _) => unreachable!("Delete is handled internally"),
+    };
 
     if args.show_path {
         println!("{}", selected_path.display());

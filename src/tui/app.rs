@@ -303,17 +303,15 @@ impl App {
         // (Items shown in arrival order initially, will be re-sorted in finish_loading)
         // Apply workspace filter during loading too
         for idx in start_idx..end_idx {
-            if self.workspace_filter {
-                if let Some(ref project_dir_name) = self.current_project_dir_name {
-                    if !self.conversations[idx]
-                        .path
-                        .parent()
-                        .and_then(|p| p.file_name())
-                        .is_some_and(|name| name.to_string_lossy() == *project_dir_name)
-                    {
-                        continue;
-                    }
-                }
+            if self.workspace_filter
+                && let Some(ref project_dir_name) = self.current_project_dir_name
+                && self.conversations[idx]
+                    .path
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .is_none_or(|name| name.to_string_lossy() != *project_dir_name)
+            {
+                continue;
             }
             self.filtered.push(idx);
         }
@@ -390,16 +388,16 @@ impl App {
         let mut filtered = search::search(&self.conversations, &self.searchable, &self.query, now);
 
         // Apply workspace filter if active
-        if self.workspace_filter {
-            if let Some(ref project_dir_name) = self.current_project_dir_name {
-                filtered.retain(|&idx| {
-                    self.conversations[idx]
-                        .path
-                        .parent()
-                        .and_then(|p| p.file_name())
-                        .is_some_and(|name| name.to_string_lossy() == *project_dir_name)
-                });
-            }
+        if self.workspace_filter
+            && let Some(ref project_dir_name) = self.current_project_dir_name
+        {
+            filtered.retain(|&idx| {
+                self.conversations[idx]
+                    .path
+                    .parent()
+                    .and_then(|p| p.file_name())
+                    .is_some_and(|name| name.to_string_lossy() == *project_dir_name)
+            });
         }
 
         self.filtered = filtered;
@@ -548,6 +546,10 @@ impl App {
 
     pub fn workspace_filter(&self) -> bool {
         self.workspace_filter
+    }
+
+    pub fn has_project_context(&self) -> bool {
+        self.current_project_dir_name.is_some()
     }
 
     /// Toggle between global and workspace-only view
@@ -2151,7 +2153,13 @@ pub fn run_with_loader(
     }));
 
     let mut guard = TerminalGuard::new()?;
-    let mut app = App::new_loading(tool_display, show_thinking, keys, workspace_filter, current_project_dir_name);
+    let mut app = App::new_loading(
+        tool_display,
+        show_thinking,
+        keys,
+        workspace_filter,
+        current_project_dir_name,
+    );
 
     loop {
         // Process all pending loader messages (non-blocking)
