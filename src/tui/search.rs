@@ -29,7 +29,8 @@ pub fn is_uuid(query: &str) -> bool {
 
 /// Check if a character is CJK punctuation or symbol
 fn is_cjk_punctuation(c: char) -> bool {
-    matches!(c,
+    matches!(
+        c,
         '\u{FF0C}' |  // fullwidth comma
         '\u{3002}' |  // ideographic full stop
         '\u{3001}' |  // ideographic comma
@@ -50,7 +51,7 @@ fn is_cjk_punctuation(c: char) -> bool {
         '\u{2014}' |  // em dash
         '\u{2026}' |  // horizontal ellipsis
         '\u{00B7}' |  // middle dot
-        '\u{3000}'..='\u{303F}'  // CJK Symbols and Punctuation block
+        '\u{3000}'..='\u{303F}' // CJK Symbols and Punctuation block
     )
 }
 

@@ -3,12 +3,12 @@ use crate::tui::app::{
     App, AppMode, DialogMode, LineStyle, LoadingState, RenderedLine, ViewSearchMode, ViewState,
 };
 use crate::tui::search::normalize_for_search;
-use unicode_width::UnicodeWidthChar;
 use crate::tui::theme::{self, Theme};
 use chrono::{DateTime, Local};
 use ratatui::layout::Position;
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph};
+use unicode_width::UnicodeWidthChar;
 
 /// Get the current theme
 fn th() -> &'static Theme {
@@ -694,9 +694,13 @@ fn render_search_input(frame: &mut Frame, state: &ViewState, area: Rect) {
     frame.render_widget(input, area);
 
     // Position cursor (account for "  /" prefix = 3 columns)
-    let cursor_x = area.x + 3 + state.search_query.chars()
-        .map(|c| UnicodeWidthChar::width(c).unwrap_or(0) as u16)
-        .sum::<u16>();
+    let cursor_x = area.x
+        + 3
+        + state
+            .search_query
+            .chars()
+            .map(|c| UnicodeWidthChar::width(c).unwrap_or(0) as u16)
+            .sum::<u16>();
     frame.set_cursor_position(Position::new(cursor_x, area.y));
 }
 
@@ -851,7 +855,10 @@ fn render_search_bar(frame: &mut Frame, app: &App, area: Rect) {
     // Build search line: " ❯ query" on left, "status " on right
     let query = app.query();
     // prefix " ❯ " is 3 display columns
-    let left_width = 3 + query.chars().map(|c| UnicodeWidthChar::width(c).unwrap_or(0)).sum::<usize>();
+    let left_width = 3 + query
+        .chars()
+        .map(|c| UnicodeWidthChar::width(c).unwrap_or(0))
+        .sum::<usize>();
     let count_len = status_text.chars().count() + 1; // +1 for trailing space
     let padding = (area.width as usize).saturating_sub(left_width + count_len + 1);
 
@@ -1013,7 +1020,9 @@ fn render_help_overlay(
             ("↑ / ↓".into(), "Move selection"),
             ("← / →".into(), "Move cursor"),
             ("Ctrl+P / N".into(), "Move selection"),
-            ("Ctrl+D / U".into(), "Half page down/up"),
+            ("Ctrl+D".into(), "Half page down"),
+            ("Ctrl+U".into(), "Kill to start of line"),
+            ("Ctrl+K".into(), "Kill to end of line"),
             ("PgUp / PgDn".into(), "Jump by page"),
             ("Home / End".into(), "Jump to first/last"),
             ("Enter".into(), "Open viewer"),

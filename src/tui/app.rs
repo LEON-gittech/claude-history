@@ -443,14 +443,6 @@ impl App {
         }
     }
 
-    /// Move selection up by half a page (vim-style Ctrl-U)
-    fn select_half_page_up(&mut self, viewport_height: usize) {
-        if let Some(selected) = self.selected {
-            let half_page = viewport_height / 2;
-            self.selected = Some(selected.saturating_sub(half_page));
-        }
-    }
-
     /// Move selection down by half a page (vim-style Ctrl-D)
     fn select_half_page_down(&mut self, viewport_height: usize) {
         if let Some(selected) = self.selected {
@@ -1237,6 +1229,11 @@ impl App {
                 // Ctrl+K: kill from cursor to end of line
                 KeyCode::Char('k') if modifiers.contains(KeyModifiers::CONTROL) => {
                     self.kill_to_end();
+                    None
+                }
+                // Ctrl+U: kill from beginning of line to cursor
+                KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.kill_to_start();
                     None
                 }
                 KeyCode::PageUp => {
