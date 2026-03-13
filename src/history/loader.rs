@@ -169,12 +169,20 @@ fn load_all_streaming_inner(
 /// Find a session JSONL file by UUID across all projects.
 /// Returns the path to the `.jsonl` file if found.
 pub fn find_jsonl_by_uuid(uuid: &str) -> Result<Option<PathBuf>> {
+    let matches = find_all_jsonl_by_uuid(uuid)?;
+    Ok(matches.into_iter().next())
+}
+
+/// Find all session JSONL files by UUID across all projects.
+/// A session may exist in multiple project directories due to cross-project forking.
+fn find_all_jsonl_by_uuid(uuid: &str) -> Result<Vec<PathBuf>> {
     let root = super::get_claude_projects_root()?;
     if !root.exists() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
 
     let filename = format!("{}.jsonl", uuid);
+    let mut matches = Vec::new();
 
     for entry in read_dir(&root)? {
         let entry = entry?;
@@ -184,11 +192,36 @@ pub fn find_jsonl_by_uuid(uuid: &str) -> Result<Option<PathBuf>> {
         }
         let candidate = project_dir.join(&filename);
         if candidate.exists() {
-            return Ok(Some(candidate));
+            matches.push(candidate);
         }
     }
 
-    Ok(None)
+    Ok(matches)
+}
+
+/// Delete a session by UUID across all projects.
+/// Removes both the .jsonl file and the session subdirectory (tool-results/, subagents/).
+/// Returns the number of files deleted.
+pub fn delete_session_by_uuid(uuid: &str) -> Result<usize> {
+    let matches = find_all_jsonl_by_uuid(uuid)?;
+    if matches.is_empty() {
+        return Err(AppError::SessionNotFound(uuid.to_owned()));
+    }
+
+    let count = matches.len();
+    for jsonl_path in &matches {
+        std::fs::remove_file(jsonl_path)?;
+
+        // Also remove the session subdirectory if it exists
+        if let Some(project_dir) = jsonl_path.parent() {
+            let session_dir = project_dir.join(uuid);
+            if session_dir.is_dir() {
+                std::fs::remove_dir_all(&session_dir)?;
+            }
+        }
+    }
+
+    Ok(count)
 }
 
 /// List all projects that contain conversation files

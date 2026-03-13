@@ -105,6 +105,24 @@ fn run() -> Result<()> {
         std::io::stdout().is_terminal(),
     );
 
+    // Handle --delete flag: delete a session by UUID and exit
+    if let Some(ref session_id) = args.delete {
+        match history::delete_session_by_uuid(session_id) {
+            Ok(count) => {
+                if count == 1 {
+                    eprintln!("Deleted session {}", session_id);
+                } else {
+                    eprintln!(
+                        "Deleted session {} ({} copies across projects)",
+                        session_id, count
+                    );
+                }
+                return Ok(());
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
     // Handle --render flag: render a JSONL file in ledger format and exit
     if let Some(ref render_path) = args.render {
         let display_options = display::DisplayOptions {

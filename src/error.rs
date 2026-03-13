@@ -17,6 +17,9 @@ pub enum AppError {
     #[error("User cancelled selection")]
     SelectionCancelled,
 
+    #[error("Session not found: {0}")]
+    SessionNotFound(String),
+
     #[error("Failed to run Claude CLI: {0}")]
     ClaudeExecutionError(String),
 

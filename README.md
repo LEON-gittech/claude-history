@@ -186,6 +186,7 @@ Options:
   -p, --show-path        Print the selected conversation file path
   -i, --show-id          Print the selected conversation session ID
       --plain            Output plain text without ledger formatting
+      --delete <SESSION_ID>  Delete a session by its UUID and exit
       --debug [<LEVEL>]  Print debug information (optionally filter by level: debug, info, warn, error)
   -g, --global           Search all conversations from all projects at once
       --pager            Display output through a pager (less)

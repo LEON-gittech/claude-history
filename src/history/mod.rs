@@ -21,7 +21,10 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 // Re-export public API
-pub use loader::{find_jsonl_by_uuid, load_all_conversations_streaming, load_conversations};
+pub use loader::{
+    delete_session_by_uuid, find_jsonl_by_uuid, load_all_conversations_streaming,
+    load_conversations,
+};
 pub use parser::process_conversation_file;
 pub use path::{convert_path_to_project_dir_name, format_short_name_from_path};
 

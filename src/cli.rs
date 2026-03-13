@@ -139,11 +139,20 @@ pub struct Args {
     #[arg(long, help = "Disable colored output")]
     pub no_color: bool,
 
+    /// Delete a session by its ID
+    #[arg(
+        long,
+        value_name = "SESSION_ID",
+        help = "Delete a session by its UUID and exit",
+        conflicts_with_all = ["global", "show_dir", "resume", "show_path", "show_id", "plain", "render", "input_file"]
+    )]
+    pub delete: Option<String>,
+
     /// Input JSONL file to view directly (skips conversation selection)
     #[arg(
         value_name = "FILE",
         help = "JSONL conversation file to view directly",
-        conflicts_with_all = ["global", "show_dir", "resume", "show_path", "show_id", "plain", "render"]
+        conflicts_with_all = ["global", "show_dir", "resume", "show_path", "show_id", "plain", "render", "delete"]
     )]
     pub input_file: Option<PathBuf>,
 }
