@@ -624,8 +624,20 @@ impl App {
         // Try to find and load from filesystem
         let path = crate::history::find_jsonl_by_uuid(uuid).ok()??;
         let modified = path.metadata().ok().and_then(|m| m.modified().ok());
-        let conv =
+        let mut conv =
             crate::history::process_conversation_file(path, false, modified, None).ok()??;
+
+        // Inject project metadata (process_conversation_file doesn't set these)
+        let fallback_path = conv
+            .path
+            .parent()
+            .and_then(|p| p.file_name())
+            .map(|n| crate::history::path::decode_project_dir_name_to_path(&n.to_string_lossy()))
+            .unwrap_or_default();
+        let project_path = conv.cwd.clone().unwrap_or(fallback_path);
+        conv.project_name = Some(format_short_name_from_path(&project_path));
+        conv.project_path = Some(project_path);
+
         let idx = self.conversations.len();
         self.conversations.push(conv);
 
