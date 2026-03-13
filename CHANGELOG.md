@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.41 (2026-03-13)
+
+- Workspace filter now includes conversations from git worktrees of the same
+  project, so sessions started in workmux worktrees appear alongside the main
+  project's sessions
+- Search result counter now shows the count relative to the current scope
+  (project or global) instead of always showing the total
+
 ## v0.1.40 (2026-03-13)
 
 - Search typing is now smoother — search runs in a background thread so
