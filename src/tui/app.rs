@@ -2394,19 +2394,20 @@ pub fn run_with_loader(
                 if let Some(action) = app.handle_key(key.code, key.modifiers, viewport_height) {
                     match action {
                         Action::Delete(ref path) => {
-                            // Delete the file from disk
-                            match std::fs::remove_file(path) {
-                                Ok(()) => {
-                                    // Only remove from list if file deletion succeeded
+                            // Extract UUID from filename and delete session
+                            // (removes .jsonl + session dir with tool-results/subagents)
+                            let uuid = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                            match crate::history::delete_session_by_uuid(uuid) {
+                                Ok(_) => {
+                                    // Only remove from list if deletion succeeded
                                     app.remove_selected_from_list();
                                     // If in view mode, return to list
                                     app.exit_view_mode();
                                 }
                                 Err(e) => {
                                     let _ = debug_log::log_debug(&format!(
-                                        "Failed to delete {}: {}",
-                                        path.display(),
-                                        e
+                                        "Failed to delete session {}: {}",
+                                        uuid, e
                                     ));
                                     // Keep item in list since file still exists
                                 }
