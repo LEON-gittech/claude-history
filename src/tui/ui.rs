@@ -187,7 +187,7 @@ fn render_list_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let keys = app.keys();
-    let spans = vec![
+    let mut spans = vec![
         Span::raw("  "),
         Span::styled("Enter", action_key),
         Span::styled(" open  ", action_label),
@@ -197,11 +197,30 @@ fn render_list_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(" fork  ", action_label),
         Span::styled(keys.delete.short_label(), action_key),
         Span::styled(" delete  ", action_label),
+    ];
+
+    // Scope toggle (only when project context exists)
+    if app.has_project_context() {
+        let scope_label = if app.workspace_filter() { "Prj" } else { "All" };
+        let scope_val_style = if app.workspace_filter() {
+            Style::default().fg(rgb(th().accent)).bold()
+        } else {
+            label_style
+        };
+        spans.extend([
+            Span::styled("Tab", key_style),
+            Span::styled("\u{b7}", label_style),
+            Span::styled(scope_label, scope_val_style),
+            Span::raw("  "),
+        ]);
+    }
+
+    spans.extend([
         Span::styled("?", key_style),
         Span::styled("help  ", label_style),
         Span::styled("Esc", key_style),
         Span::styled(" quit", label_style),
-    ];
+    ]);
 
     let status_line = Line::from(spans);
     let status = Paragraph::new(status_line).style(Style::default().bg(rgb(th().status_bar_bg)));
@@ -852,48 +871,50 @@ fn render_search_bar(frame: &mut Frame, app: &App, area: Rect) {
         }
     };
 
-    // Scope indicator: [All] or [Workspace]
-    let scope_label = if app.workspace_filter() { "Workspace" } else { "All" };
-    let scope_text = format!("[{}]", scope_label);
-    let scope_display_len = scope_text.chars().count();
-
-    // Build search line: " ❯ [Scope] query" on left, "status " on right
+    // Build search line with optional "Project" prefix when workspace filter is active
     let query = app.query();
-    // prefix " ❯ " = 3 columns, scope + " " separator
-    let prefix_width = 3 + scope_display_len + 1;
+    let prompt_style = Style::default().fg(rgb(th().accent));
+
+    // " Project ❯ " when filtering, " ❯ " otherwise
+    let (prompt_spans, prefix_width) = if app.workspace_filter() {
+        (
+            vec![
+                Span::raw(" "),
+                Span::styled("Project", Style::default().fg(rgb(th().text_muted))),
+                Span::raw(" "),
+                Span::styled("\u{276F} ", prompt_style),
+            ],
+            11, // " Project ❯ " = 11 columns
+        )
+    } else {
+        (
+            vec![Span::raw(" "), Span::styled("\u{276F} ", prompt_style)],
+            3, // " ❯ " = 3 columns
+        )
+    };
+
     let left_width = prefix_width
         + query
             .chars()
             .map(|c| UnicodeWidthChar::width(c).unwrap_or(0))
             .sum::<usize>();
-    let count_len = status_text.chars().count() + 1; // +1 for trailing space
-    let padding = (area.width as usize).saturating_sub(left_width + count_len + 1);
-
-    // Prompt is always active - user can type during loading
-    let prompt_style = Style::default().fg(rgb(th().accent));
-
-    let scope_style = if app.workspace_filter() {
-        Style::default().fg(rgb(th().accent)).bold()
-    } else {
-        Style::default().fg(rgb(th().text_muted))
-    };
+    let right_len = status_text.chars().count() + 1; // status + trailing space
+    let padding = (area.width as usize).saturating_sub(left_width + right_len + 1);
 
     let status_style = if app.is_loading() {
-        Style::default().fg(rgb(th().accent)) // Highlight loading status
+        Style::default().fg(rgb(th().accent))
     } else {
         Style::default().fg(rgb(th().text_muted))
     };
 
-    let search_line = Line::from(vec![
-        Span::raw(" "),
-        Span::styled("\u{276F} ", prompt_style),
-        Span::styled(scope_text, scope_style),
-        Span::raw(" "),
+    let mut spans = prompt_spans;
+    spans.extend([
         Span::raw(query.to_string()),
         Span::raw(" ".repeat(padding)),
         Span::styled(status_text, status_style),
         Span::raw(" "),
     ]);
+    let search_line = Line::from(spans);
 
     let input = Paragraph::new(search_line).block(
         Block::default()
@@ -903,7 +924,7 @@ fn render_search_bar(frame: &mut Frame, app: &App, area: Rect) {
 
     frame.render_widget(input, area);
 
-    // Position cursor at cursor_pos (account for " ❯ [Scope] " prefix)
+    // Position cursor at cursor_pos (account for " ❯ " prefix = 3 columns)
     if area.width > prefix_width as u16 {
         let cursor_offset: u16 = app
             .query()
@@ -913,7 +934,9 @@ fn render_search_bar(frame: &mut Frame, app: &App, area: Rect) {
             .sum::<usize>()
             .min(u16::MAX as usize) as u16;
         let max_x = area.x + area.width.saturating_sub(2);
-        let cursor_x = (area.x + prefix_width as u16).saturating_add(cursor_offset).min(max_x);
+        let cursor_x = (area.x + prefix_width as u16)
+            .saturating_add(cursor_offset)
+            .min(max_x);
         frame.set_cursor_position(Position::new(cursor_x, area.y));
     }
 }
@@ -1041,7 +1064,7 @@ fn render_help_overlay(
             ("Ctrl+K".into(), "Kill to end of line"),
             ("PgUp / PgDn".into(), "Jump by page"),
             ("Home / End".into(), "Jump to first/last"),
-            ("Tab".into(), "Toggle All/Workspace"),
+            ("Tab".into(), "Toggle scope (All/Project)"),
             ("Enter".into(), "Open viewer"),
             ("Ctrl+O".into(), "Select and exit"),
             ("Ctrl+W".into(), "Delete word"),
