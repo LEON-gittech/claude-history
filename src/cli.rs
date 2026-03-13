@@ -112,12 +112,8 @@ pub struct Args {
     )]
     pub debug: Option<DebugLevel>,
 
-    /// Search conversations from all projects globally
-    #[arg(
-        long,
-        short = 'g',
-        help = "Search all conversations from all projects at once (default behavior)"
-    )]
+    /// Deprecated: global is now the default behavior
+    #[arg(long, short = 'g', hide = true)]
     pub global: bool,
 
     /// Show only conversations from the current workspace
@@ -161,7 +157,7 @@ pub struct Args {
     #[arg(
         value_name = "FILE",
         help = "JSONL conversation file to view directly",
-        conflicts_with_all = ["global", "show_dir", "resume", "show_path", "show_id", "plain", "render", "delete"]
+        conflicts_with_all = ["global", "local", "show_dir", "resume", "show_path", "show_id", "plain", "render", "delete"]
     )]
     pub input_file: Option<PathBuf>,
 }

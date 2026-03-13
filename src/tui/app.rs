@@ -166,7 +166,8 @@ pub struct App {
 }
 
 impl App {
-    /// Create a new app with all conversations pre-loaded (existing behavior)
+    /// Create a new app with all conversations pre-loaded
+    #[allow(dead_code)]
     pub fn new(
         conversations: Vec<Conversation>,
         tool_display: ToolDisplayMode,
@@ -2029,109 +2030,6 @@ fn drain_events(wait: Duration) -> Result<Vec<Event>> {
     }
 
     Ok(events)
-}
-
-/// Run the TUI and return the selected conversation path or None if cancelled
-#[allow(dead_code)]
-pub fn run(
-    conversations: Vec<Conversation>,
-    tool_display: ToolDisplayMode,
-    show_thinking: bool,
-    keys: KeyBindings,
-) -> Result<Action> {
-    // Set up panic hook to restore terminal
-    let original_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic_info| {
-        let _ = terminal::disable_raw_mode();
-        let _ = crossterm::execute!(io::stdout(), LeaveAlternateScreen);
-        original_hook(panic_info);
-    }));
-
-    let mut guard = TerminalGuard::new()?;
-    let mut app = App::new(conversations, tool_display, show_thinking, keys);
-
-    loop {
-        let frame_area = guard.terminal.get_frame().area();
-        let viewport_height = frame_area.height.saturating_sub(3) as usize; // Subtract header/status
-        let content_width = (frame_area.width as usize)
-            .saturating_sub(NAME_WIDTH + 3 + crate::tui::viewer::GUTTER_WIDTH);
-
-        // Check for resize in view mode
-        app.check_view_resize(content_width, viewport_height);
-
-        guard.terminal.draw(|frame| ui::render(frame, &app))?;
-
-        // Drain and process events, with lookahead to batch rapid key repeats.
-        // After processing a batch, wait briefly for more events before rendering.
-        // This prevents "navigation keeps going after key release" caused by
-        // events accumulating during render().
-        let mut first_drain = true;
-        'events: loop {
-            let events = if first_drain {
-                first_drain = false;
-                drain_events(Duration::from_secs(3600))?
-            } else {
-                // Lookahead: wait briefly to catch the next key repeat
-                if !event::poll(REPEAT_LOOKAHEAD).map_err(|e| AppError::Io(io::Error::other(e)))? {
-                    break;
-                }
-                drain_events(Duration::ZERO)?
-            };
-
-            for ev in events {
-                let Event::Key(key) = ev else { continue };
-                // Only handle key press events (not release)
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-
-                // Check for Enter in list mode - enter view mode (but not during dialogs)
-                if matches!(app.app_mode(), AppMode::List)
-                    && *app.dialog_mode() == DialogMode::None
-                    && key.code == KeyCode::Enter
-                    && !app.is_loading()
-                    && app.selected().is_some()
-                {
-                    app.enter_view_mode(content_width);
-                    break 'events; // mode transition: redraw before processing more events
-                }
-
-                if let Some(action) = app.handle_key(key.code, key.modifiers, viewport_height) {
-                    match action {
-                        Action::Delete(ref path) => {
-                            // Delete the file from disk
-                            match std::fs::remove_file(path) {
-                                Ok(()) => {
-                                    // Only remove from list if file deletion succeeded
-                                    app.remove_selected_from_list();
-                                    // If in view mode, return to list
-                                    app.exit_view_mode();
-                                }
-                                Err(e) => {
-                                    let _ = debug_log::log_debug(&format!(
-                                        "Failed to delete {}: {}",
-                                        path.display(),
-                                        e
-                                    ));
-                                    // Keep item in list since file still exists
-                                }
-                            }
-                            // Continue the loop (don't exit TUI)
-                        }
-                        Action::Select(ref path) => {
-                            let _ = debug_log::log_selected_path(path);
-                            return Ok(action);
-                        }
-                        Action::Resume(ref path) | Action::ForkResume(ref path) => {
-                            let _ = debug_log::log_selected_path(path);
-                            return Ok(action);
-                        }
-                        Action::Quit => return Ok(action),
-                    }
-                }
-            }
-        }
-    }
 }
 
 /// Run the TUI with background loading

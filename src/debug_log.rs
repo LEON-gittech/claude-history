@@ -124,6 +124,7 @@ pub fn log_debug(message: &str) -> std::io::Result<()> {
 }
 
 /// Log the selected conversation path to the debug log file.
+#[allow(dead_code)]
 pub fn log_selected_path(path: &std::path::Path) -> std::io::Result<()> {
     let log_path = match get_debug_log_path() {
         Some(p) => p,

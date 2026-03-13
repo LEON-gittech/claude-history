@@ -10,6 +10,9 @@ use std::path::PathBuf;
 #[derive(Deserialize, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigFile {
+    /// Deprecated: global is now the default. Use `--local` flag or Tab toggle instead.
+    /// Kept for backwards compatibility with existing config files.
+    #[allow(dead_code)]
     pub global: Option<bool>,
     pub display: Option<DisplayConfig>,
     pub resume: Option<ResumeConfig>,

@@ -153,9 +153,7 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    // config.global=false means "workspace only" in old config, which maps to local=true
-    let config_local = config.global.map(|g| !g);
-    let use_local = resolve_bool_setting(args.local, args.global, config_local, false);
+    let use_local = args.local;
 
     // Determine the current workspace's project directory name (for workspace filter)
     let current_dir = std::env::current_dir().ok();
