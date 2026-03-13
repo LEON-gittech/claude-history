@@ -27,31 +27,43 @@ pub fn is_uuid(query: &str) -> bool {
         .all(|(part, &len)| part.len() == len && part.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
-/// Check if a character is CJK punctuation or symbol
+/// Check if a character is CJK punctuation or symbol.
+/// Only includes actual punctuation — excludes iteration marks (々), shorthand (〆),
+/// and CJK zero (〇) which appear inside words/names.
 fn is_cjk_punctuation(c: char) -> bool {
     matches!(
         c,
-        '\u{FF0C}' |  // fullwidth comma
-        '\u{3002}' |  // ideographic full stop
-        '\u{3001}' |  // ideographic comma
-        '\u{FF01}' |  // fullwidth exclamation
-        '\u{FF1F}' |  // fullwidth question mark
-        '\u{FF1B}' |  // fullwidth semicolon
-        '\u{FF1A}' |  // fullwidth colon
-        '\u{201C}' |  // left double quotation mark
-        '\u{201D}' |  // right double quotation mark
-        '\u{2018}' |  // left single quotation mark
-        '\u{2019}' |  // right single quotation mark
-        '\u{3010}' |  // left black lenticular bracket
-        '\u{3011}' |  // right black lenticular bracket
-        '\u{300A}' |  // left double angle bracket
-        '\u{300B}' |  // right double angle bracket
-        '\u{FF08}' |  // fullwidth left parenthesis
-        '\u{FF09}' |  // fullwidth right parenthesis
-        '\u{2014}' |  // em dash
-        '\u{2026}' |  // horizontal ellipsis
-        '\u{00B7}' |  // middle dot
-        '\u{3000}'..='\u{303F}' // CJK Symbols and Punctuation block
+        '\u{3000}' | // ideographic space
+        '\u{3001}' | // ideographic comma
+        '\u{3002}' | // ideographic full stop
+        '\u{3008}' | // left angle bracket
+        '\u{3009}' | // right angle bracket
+        '\u{300A}' | // left double angle bracket
+        '\u{300B}' | // right double angle bracket
+        '\u{300C}' | // left corner bracket
+        '\u{300D}' | // right corner bracket
+        '\u{300E}' | // left white corner bracket
+        '\u{300F}' | // right white corner bracket
+        '\u{3010}' | // left black lenticular bracket
+        '\u{3011}' | // right black lenticular bracket
+        '\u{3014}' | // left tortoise shell bracket
+        '\u{3015}' | // right tortoise shell bracket
+        '\u{3016}' | // left white lenticular bracket
+        '\u{3017}' | // right white lenticular bracket
+        '\u{FF01}' | // fullwidth exclamation
+        '\u{FF08}' | // fullwidth left parenthesis
+        '\u{FF09}' | // fullwidth right parenthesis
+        '\u{FF0C}' | // fullwidth comma
+        '\u{FF1A}' | // fullwidth colon
+        '\u{FF1B}' | // fullwidth semicolon
+        '\u{FF1F}' | // fullwidth question mark
+        '\u{201C}' | // left double quotation mark
+        '\u{201D}' | // right double quotation mark
+        '\u{2018}' | // left single quotation mark
+        '\u{2019}' | // right single quotation mark
+        '\u{2014}' | // em dash
+        '\u{2026}' | // horizontal ellipsis
+        '\u{00B7}' // middle dot
     )
 }
 
