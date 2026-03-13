@@ -42,6 +42,7 @@ impl fmt::Display for DebugLevel {
 
 #[derive(Parser, Debug)]
 #[command(name = "claude-history")]
+#[command(version)]
 #[command(about = "View Claude conversation history")]
 #[command(version)]
 pub struct Args {

@@ -203,6 +203,11 @@ fn find_all_jsonl_by_uuid(uuid: &str) -> Result<Vec<PathBuf>> {
 /// Removes both the .jsonl file and the session subdirectory (tool-results/, subagents/).
 /// Returns the number of files deleted.
 pub fn delete_session_by_uuid(uuid: &str) -> Result<usize> {
+    // Validate format to prevent path traversal
+    if uuid.is_empty() || !uuid.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err(AppError::SessionNotFound(uuid.to_owned()));
+    }
+
     let matches = find_all_jsonl_by_uuid(uuid)?;
     if matches.is_empty() {
         return Err(AppError::SessionNotFound(uuid.to_owned()));
