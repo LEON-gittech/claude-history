@@ -64,6 +64,7 @@ preview.
 | `Ctrl+R`                | Resume conversation             |
 | `Ctrl+F`                | Fork and resume conversation    |
 | `Ctrl+X`                | Delete conversation             |
+| `Tab`                   | Toggle all / workspace scope    |
 | `?`                     | Show keyboard shortcuts         |
 | `Esc` / `Ctrl+C`        | Quit                            |
 
@@ -188,7 +189,7 @@ Options:
       --plain            Output plain text without ledger formatting
       --delete <SESSION_ID>  Delete a session by its UUID and exit
       --debug [<LEVEL>]  Print debug information (optionally filter by level: debug, info, warn, error)
-  -g, --global           Search all conversations from all projects at once
+  -L, --local            Show only conversations from the current workspace directory
       --pager            Display output through a pager (less)
       --no-pager         Disable pager output
       --render <FILE>    Render a JSONL file in ledger format and exit
@@ -227,10 +228,9 @@ To fork a conversation (creating a new session branching from the original), use
 `--resume --fork-session` or press `Ctrl+F` in the TUI. This passes
 `--fork-session` to the `claude` command.
 
-When forking from `--global` mode and the conversation belongs to a different
-project than your current working directory, the session files are copied to
-your CWD's project directory first, then resumed there — so the fork lives in
-your current project.
+When forking a conversation from a different project than your current working
+directory, the session files are copied to your CWD's project directory first,
+then resumed there — so the fork lives in your current project.
 
 You can configure default arguments to pass to the `claude` command every time
 you resume a conversation. This is useful if you typically run Claude with
@@ -293,24 +293,20 @@ is a terminal. This enables scrolling through long conversations. Use
 The pager respects the `$PAGER` environment variable. If not set, it defaults to
 `less -R` (which preserves ANSI colors).
 
-### Global search
+### Scope: all conversations vs current workspace
 
-Use `--global` (or `-g`) to search all conversations from all projects at once:
+By default, `claude-history` shows all conversations from every project, sorted
+by modification time (newest first). Each conversation shows its project path so
+you can identify which project it belongs to.
 
-```sh
-$ claude-history --global
-```
-
-This displays all conversations from every project in a single view, sorted by
-modification time (newest first). Each conversation shows its project path so
-you can identify which project it belongs to. Conversations load in the
-background so you can start typing immediately.
+Press `Tab` to toggle between all conversations and the current workspace only.
+Use `-L`/`--local` to start with the workspace filter active.
 
 For [workmux](https://github.com/raine/workmux) users, worktree paths are
 displayed in a compact format: `[project/worktree]` instead of just the worktree
 folder name.
 
-The `--resume` flag works with global search. It will automatically run Claude
+The `--resume` flag works across projects. It will automatically run Claude
 in the correct project directory for the selected conversation.
 
 ### Integration with other scripts
@@ -391,11 +387,6 @@ EOF
 ```
 
 ### Available options
-
-#### Global options
-
-- `global` (boolean): Always use global search across all projects (default:
-  false). Equivalent to always passing `--global` / `-g`
 
 #### Display options
 
