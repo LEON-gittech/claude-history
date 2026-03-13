@@ -694,13 +694,13 @@ fn render_search_input(frame: &mut Frame, state: &ViewState, area: Rect) {
     frame.render_widget(input, area);
 
     // Position cursor (account for "  /" prefix = 3 columns)
-    let cursor_x = area.x
-        + 3
-        + state
-            .search_query
-            .chars()
-            .map(|c| UnicodeWidthChar::width(c).unwrap_or(0) as u16)
-            .sum::<u16>();
+    let query_width: usize = state
+        .search_query
+        .chars()
+        .map(|c| UnicodeWidthChar::width(c).unwrap_or(0))
+        .sum();
+    let max_x = area.x + area.width.saturating_sub(1);
+    let cursor_x = (area.x + 3 + query_width.min(u16::MAX as usize) as u16).min(max_x);
     frame.set_cursor_position(Position::new(cursor_x, area.y));
 }
 
@@ -894,8 +894,9 @@ fn render_search_bar(frame: &mut Frame, app: &App, area: Rect) {
             .query()
             .chars()
             .take(app.cursor_pos())
-            .map(|c| UnicodeWidthChar::width(c).unwrap_or(0) as u16)
-            .sum();
+            .map(|c| UnicodeWidthChar::width(c).unwrap_or(0))
+            .sum::<usize>()
+            .min(u16::MAX as usize) as u16;
         let max_x = area.x + area.width.saturating_sub(2);
         let cursor_x = (area.x + 3).saturating_add(cursor_offset).min(max_x);
         frame.set_cursor_position(Position::new(cursor_x, area.y));
