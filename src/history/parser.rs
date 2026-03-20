@@ -348,6 +348,7 @@ pub(crate) fn is_clear_metadata_message(message: &str) -> bool {
         || trimmed.contains("<command-message>clear</command-message>")
         || trimmed.contains("<local-command-stdout>")
         || trimmed.contains("<command-args>")
+        || trimmed.starts_with("Base directory for this skill:")
 }
 
 /// Check if a conversation only contains /clear command messages
@@ -710,6 +711,10 @@ mod tests {
         ));
         assert!(is_clear_metadata_message(
             "<command-args>foo</command-args>"
+        ));
+
+        assert!(is_clear_metadata_message(
+            "Base directory for this skill: /Users/raine/.claude/skills/consult\n\nConsult an external LLM."
         ));
 
         // Should NOT match normal messages

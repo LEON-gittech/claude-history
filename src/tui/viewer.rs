@@ -1846,6 +1846,11 @@ fn process_command_message(text: &str) -> Option<String> {
         }
     }
 
+    // Skill invocation expanded prompts - show condensed label instead of full prompt
+    if trimmed.starts_with("Base directory for this skill:") {
+        return Some("Skill invoked".to_string());
+    }
+
     Some(text.to_string())
 }
 
