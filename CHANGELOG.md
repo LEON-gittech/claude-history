@@ -1,4 +1,8 @@
-# Changelog
+## v0.1.45 (2026-03-20)
+
+- Skill invocation prompts (e.g. from `/consult`, `/commit`) are now hidden from
+  search results and shown as a concise description in the conversation viewer
+  instead of displaying the full expanded prompt text
 
 ## v0.1.44 (2026-03-17)
 
