@@ -2253,11 +2253,6 @@ const NAME_WIDTH: usize = 9;
 /// Maximum events to drain in a single batch to avoid starving redraws
 const MAX_EVENT_BATCH: usize = 256;
 
-/// Brief lookahead after processing events to catch rapid key repeats before
-/// rendering. Long enough to capture standard OS key repeat intervals (~30ms),
-/// short enough to feel instant for single keypresses.
-const REPEAT_LOOKAHEAD: Duration = Duration::from_millis(20);
-
 /// Read all immediately available events after an initial blocking wait.
 ///
 /// When pasting text, crossterm delivers each character as a separate KeyEvent.
@@ -2372,62 +2367,51 @@ pub fn run_with_loader(
             Duration::from_secs(3600)
         };
 
-        // Drain and process events, with lookahead to batch rapid key repeats.
-        let mut first_drain = true;
-        'events: loop {
-            let events = if first_drain {
-                first_drain = false;
-                drain_events(poll_timeout)?
-            } else {
-                // Lookahead: wait briefly to catch the next key repeat
-                if !event::poll(REPEAT_LOOKAHEAD).map_err(|e| AppError::Io(io::Error::other(e)))? {
-                    break;
-                }
-                drain_events(Duration::ZERO)?
-            };
+        // Drain all currently queued events and process them, then redraw.
+        // drain_events coalesces events that arrive during rendering (e.g. paste),
+        // while always returning to the outer loop for a redraw after each batch.
+        let events = drain_events(poll_timeout)?;
+        for ev in events {
+            let Event::Key(key) = ev else { continue };
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
 
-            for ev in events {
-                let Event::Key(key) = ev else { continue };
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
+            // Check for Enter in list mode - enter view mode (but not during dialogs)
+            if matches!(app.app_mode(), AppMode::List)
+                && *app.dialog_mode() == DialogMode::None
+                && key.code == KeyCode::Enter
+                && !app.is_loading()
+                && app.selected().is_some()
+            {
+                app.enter_view_mode(content_width);
+                break; // mode transition: redraw before processing more events
+            }
 
-                // Check for Enter in list mode - enter view mode (but not during dialogs)
-                if matches!(app.app_mode(), AppMode::List)
-                    && *app.dialog_mode() == DialogMode::None
-                    && key.code == KeyCode::Enter
-                    && !app.is_loading()
-                    && app.selected().is_some()
-                {
-                    app.enter_view_mode(content_width);
-                    break 'events; // mode transition: redraw before processing more events
-                }
-
-                if let Some(action) = app.handle_key(key.code, key.modifiers, viewport_height) {
-                    match action {
-                        Action::Delete(ref path) => {
-                            // Extract UUID from filename and delete session
-                            // (removes .jsonl + session dir with tool-results/subagents)
-                            let uuid = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                            match crate::history::delete_session_by_uuid(uuid) {
-                                Ok(_) => {
-                                    // Only remove from list if deletion succeeded
-                                    app.remove_selected_from_list();
-                                    // If in view mode, return to list
-                                    app.exit_view_mode();
-                                }
-                                Err(e) => {
-                                    let _ = debug_log::log_debug(&format!(
-                                        "Failed to delete session {}: {}",
-                                        uuid, e
-                                    ));
-                                    // Keep item in list since file still exists
-                                }
+            if let Some(action) = app.handle_key(key.code, key.modifiers, viewport_height) {
+                match action {
+                    Action::Delete(ref path) => {
+                        // Extract UUID from filename and delete session
+                        // (removes .jsonl + session dir with tool-results/subagents)
+                        let uuid = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                        match crate::history::delete_session_by_uuid(uuid) {
+                            Ok(_) => {
+                                // Only remove from list if deletion succeeded
+                                app.remove_selected_from_list();
+                                // If in view mode, return to list
+                                app.exit_view_mode();
                             }
-                            // Continue the loop (don't exit TUI)
+                            Err(e) => {
+                                let _ = debug_log::log_debug(&format!(
+                                    "Failed to delete session {}: {}",
+                                    uuid, e
+                                ));
+                                // Keep item in list since file still exists
+                            }
                         }
-                        _ => return Ok((action, app.into_conversations())),
+                        // Continue the loop (don't exit TUI)
                     }
+                    _ => return Ok((action, app.into_conversations())),
                 }
             }
         }
@@ -2463,28 +2447,14 @@ pub fn run_single_file(
 
         guard.terminal.draw(|frame| ui::render(frame, &app))?;
 
-        // Drain and process events, with lookahead to batch rapid key repeats.
-        let mut first_drain = true;
-        loop {
-            let events = if first_drain {
-                first_drain = false;
-                drain_events(Duration::from_secs(3600))?
-            } else {
-                if !event::poll(REPEAT_LOOKAHEAD).map_err(|e| AppError::Io(io::Error::other(e)))? {
-                    break;
-                }
-                drain_events(Duration::ZERO)?
-            };
-
-            for ev in events {
-                let Event::Key(key) = ev else { continue };
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-                if let Some(Action::Quit) = app.handle_key(key.code, key.modifiers, viewport_height)
-                {
-                    return Ok(());
-                }
+        let events = drain_events(Duration::from_secs(3600))?;
+        for ev in events {
+            let Event::Key(key) = ev else { continue };
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
+            if let Some(Action::Quit) = app.handle_key(key.code, key.modifiers, viewport_height) {
+                return Ok(());
             }
         }
     }
