@@ -1,3 +1,9 @@
+## v0.1.46 (2026-03-21)
+
+- Fixed the screen freezing when holding down arrow keys or j/k to scroll — the
+  view now redraws smoothly during key repeat instead of jumping when the key is
+  released ([#25](https://github.com/raine/claude-history/issues/25))
+
 ## v0.1.45 (2026-03-20)
 
 - Skill invocation prompts (e.g. from `/consult`, `/commit`) are now hidden from
