@@ -97,6 +97,12 @@ pub(crate) fn process_conversation_reader<R: BufRead>(
                         if extracted_cwd.is_none()
                             && let Some(cwd_str) = cwd
                         {
+                            // Skip claude-mem observer sessions — they contain
+                            // automated observation logs, not real conversations.
+                            if cwd_str.contains("claude-mem") {
+                                return Ok(None);
+                            }
+
                             extracted_cwd = Some(PathBuf::from(cwd_str));
                         }
 
