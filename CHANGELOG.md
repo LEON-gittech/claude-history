@@ -1,3 +1,10 @@
+## v0.1.49 (2026-03-24)
+
+- Faster startup with per-project binary caching of parsed conversations — only
+  changed files are re-parsed on subsequent launches
+- Reduced memory usage by streaming JSONL lines instead of loading entire files
+  into memory
+
 ## v0.1.48 (2026-03-24)
 
 - Fixed search missing content in long conversations due to a 256K character
