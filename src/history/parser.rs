@@ -16,10 +16,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-/// Maximum characters for full_text search index per conversation.
-/// Set high enough to cover most conversations while preventing extreme outliers
-/// from causing excessive memory usage (~2MB per conversation is reasonable).
-const MAX_FULL_TEXT_CHARS: usize = 2 * 1024 * 1024;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -307,9 +303,6 @@ pub(crate) fn process_conversation_reader<R: BufRead>(
     let preview = normalize_whitespace(&preview);
     let full_text = normalize_whitespace(&full_text);
 
-    // Cap full_text to prevent search/highlighting lag from large tool outputs
-    let full_text = truncate_to_char_boundary(&full_text, MAX_FULL_TEXT_CHARS);
-
     // Sum token usage from deduplicated messages (all token types)
     let total_tokens: u64 = token_usage_by_msg
         .values()
@@ -448,18 +441,6 @@ pub(crate) fn is_clear_only_conversation(user_messages: &[String]) -> bool {
 /// Normalize whitespace in a string
 pub(crate) fn normalize_whitespace(s: &str) -> String {
     s.split_whitespace().collect::<Vec<&str>>().join(" ")
-}
-
-/// Truncate a string to at most `max` bytes, on a char boundary
-fn truncate_to_char_boundary(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        return s.to_owned();
-    }
-    let mut end = max;
-    while end > 0 && !s.is_char_boundary(end) {
-        end -= 1;
-    }
-    s[..end].to_owned()
 }
 
 #[cfg(test)]
