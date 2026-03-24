@@ -23,6 +23,7 @@ pub enum Action {
     Delete(PathBuf),
     Resume(PathBuf),
     ForkResume(PathBuf),
+    ResumeHere(PathBuf),
     Quit,
 }
 
@@ -1156,6 +1157,13 @@ impl App {
                 self.get_selected_path().map(Action::ForkResume)
             };
         }
+        if self.keys.resume_here.matches(code, modifiers) {
+            return if self.single_file_mode {
+                None
+            } else {
+                self.get_selected_path().map(Action::ResumeHere)
+            };
+        }
 
         let state = match &mut self.app_mode {
             AppMode::View(s) => s,
@@ -1647,6 +1655,9 @@ impl App {
         }
         if self.keys.fork.matches(code, modifiers) {
             return self.get_selected_path().map(Action::ForkResume);
+        }
+        if self.keys.resume_here.matches(code, modifiers) {
+            return self.get_selected_path().map(Action::ResumeHere);
         }
 
         // Normal handling when ready
