@@ -17,8 +17,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 /// Maximum characters for full_text search index per conversation.
-/// Prevents search/highlighting lag from conversations with large tool outputs.
-const MAX_FULL_TEXT_CHARS: usize = 256 * 1024;
+/// Set high enough to cover most conversations while preventing extreme outliers
+/// from causing excessive memory usage (~2MB per conversation is reasonable).
+const MAX_FULL_TEXT_CHARS: usize = 2 * 1024 * 1024;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
