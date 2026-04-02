@@ -217,6 +217,22 @@ fn render_list_status_bar(frame: &mut Frame, app: &App, area: Rect) {
         ]);
     }
 
+    // Hide auto toggle
+    {
+        let auto_label = if app.hide_auto() { "On" } else { "Off" };
+        let auto_val_style = if app.hide_auto() {
+            Style::default().fg(rgb(th().accent)).bold()
+        } else {
+            label_style
+        };
+        spans.extend([
+            Span::styled("S-Tab", key_style),
+            Span::styled("\u{b7}auto:", label_style),
+            Span::styled(auto_label, auto_val_style),
+            Span::raw("  "),
+        ]);
+    }
+
     spans.extend([
         Span::styled("?", key_style),
         Span::styled("help  ", label_style),

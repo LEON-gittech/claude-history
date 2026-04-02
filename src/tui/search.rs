@@ -272,6 +272,7 @@ mod tests {
             project_path: None,
             cwd: None,
             message_count: 1,
+            user_turn_count: 1,
             parse_errors: vec![],
             summary: None,
             custom_title: None,

@@ -137,6 +137,14 @@ pub struct Args {
     )]
     pub local: bool,
 
+    /// Hide automated/single-turn sessions (e.g. from claude -p, subagent spawns)
+    #[arg(
+        long,
+        short = 'H',
+        help = "Hide automated sessions (single user turn, typically from claude -p)"
+    )]
+    pub hide_auto: bool,
+
     /// Display output through a pager (less)
     #[arg(long, group = "pager_display")]
     pub pager: bool,

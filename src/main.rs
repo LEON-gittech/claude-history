@@ -201,6 +201,7 @@ fn run() -> Result<()> {
         show_thinking,
         keys,
         workspace_filter,
+        args.hide_auto,
         current_project_dir_name,
     )? {
         (tui::Action::Select(path), convs) => (convs, path),
